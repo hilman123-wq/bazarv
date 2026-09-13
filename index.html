@@ -255,6 +255,7 @@
 
     const RoleMenus = {
       admin: [
+        { id: 'dashboard_admin', icon: '🏠', label: 'Dashboard Utama', action: renderDashboardAdmin },
         { id: 'jadwal_pedagang', icon: '📅', label: 'Jadwal Rolling', action: renderJadwalPedagang },
         { id: 'master_santri', icon: '👨‍🎓', label: 'Master Santri', action: renderMasterSantri },
         { id: 'master_pedagang', icon: '🏪', label: 'Master Pedagang', action: renderMasterPedagang },
@@ -262,6 +263,7 @@
         { id: 'laporan_admin', icon: '📊', label: 'Laporan Global', action: renderLaporanGlobal }
       ],
       bendahara: [
+        { id: 'dashboard_bendahara', icon: '🏠', label: 'Dashboard Utama', action: renderDashboardBendahara },
         { id: 'pencairan_dana', icon: '💸', label: 'Pencairan Dana', action: renderApprovePencairan },
         { id: 'setoran_dana', icon: '📥', label: 'Setoran Pedagang', action: renderSetoran },
         { id: 'laporan_bendahara', icon: '📉', label: 'Laporan Keuangan', action: renderLaporanGlobal }
@@ -1721,7 +1723,166 @@
         }
       });
     }
+    // ==========================================
+    // FITUR DASHBOARD UTAMA ADMIN & BENDAHARA
+    // ==========================================
 
+    async function renderDashboardAdmin() {
+      // Tampilkan animasi loading selagi menarik data
+      document.getElementById('main-content').innerHTML = `
+        <div class="flex justify-center items-center h-64">
+           <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div>
+        </div>
+      `;
+
+      // Tarik data secara paralel
+      const [santri, pedagang, kehadiran] = await Promise.all([
+        getTableData('Santri'),
+        getTableData('Pedagang'),
+        getTableData('Kehadiran')
+      ]);
+
+      // Kalkulasi Statistik Admin
+      const totalSantri = santri ? santri.length : 0;
+      const totalPedagang = pedagang ? pedagang.length : 0;
+      const pedagangAktif = pedagang ? pedagang.filter(p => p.status_aktif !== 'Libur').length : 0;
+      
+      const hariIni = new Date().toLocaleDateString('id-ID');
+      const hadirHariIni = kehadiran ? kehadiran.filter(a => (a.waktu || a.tanggal || '').includes(hariIni)).length : 0;
+
+      document.getElementById('main-content').innerHTML = `
+        <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-2">Selamat Datang, Admin! 👋</h2>
+        <p class="text-gray-500 mb-8">Ringkasan aktivitas operasional Bazar Pondok Pesantren Al-Islam hari ini.</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+           <!-- Card Santri -->
+           <div class="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 border-l-4 border-l-blue-500 hover:shadow-md transition-shadow">
+             <div class="flex items-center justify-between">
+               <div>
+                 <p class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Total Santri</p>
+                 <h3 class="text-3xl font-extrabold text-gray-800">${totalSantri} <span class="text-sm font-normal text-gray-500">Akun</span></h3>
+               </div>
+               <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-2xl">👨‍🎓</div>
+             </div>
+           </div>
+
+           <!-- Card Semua Mitra -->
+           <div class="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
+             <div class="flex items-center justify-between">
+               <div>
+                 <p class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Total Kemitraan</p>
+                 <h3 class="text-3xl font-extrabold text-gray-800">${totalPedagang} <span class="text-sm font-normal text-gray-500">Toko</span></h3>
+               </div>
+               <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-2xl">🏪</div>
+             </div>
+           </div>
+
+           <!-- Card Mitra Aktif (Jadwal) -->
+           <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-100 border-l-4 border-l-orange-500 hover:shadow-md transition-shadow">
+             <div class="flex items-center justify-between">
+               <div>
+                 <p class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Jadwal Aktif Hari Ini</p>
+                 <h3 class="text-3xl font-extrabold text-gray-800">${pedagangAktif} <span class="text-sm font-normal text-gray-500">Toko</span></h3>
+               </div>
+               <div class="w-12 h-12 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center text-2xl">📅</div>
+             </div>
+           </div>
+
+           <!-- Card Absensi Hadir -->
+           <div class="bg-white p-6 rounded-2xl shadow-sm border border-purple-100 border-l-4 border-l-purple-500 hover:shadow-md transition-shadow">
+             <div class="flex items-center justify-between">
+               <div>
+                 <p class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Kehadiran (Absensi)</p>
+                 <h3 class="text-3xl font-extrabold text-gray-800">${hadirHariIni} <span class="text-sm font-normal text-gray-500">Toko</span></h3>
+               </div>
+               <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-2xl">📸</div>
+             </div>
+           </div>
+        </div>
+
+        <!-- Call to Action Cepat -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+           <button onclick="loadMenu(3, document.querySelectorAll('.menu-btn')[3])" class="p-4 bg-gray-900 hover:bg-black text-white rounded-xl shadow font-bold transition-all text-left flex items-center justify-between">
+             <span>Kelola Data Pedagang</span> <span>&rarr;</span>
+           </button>
+           <button onclick="loadMenu(4, document.querySelectorAll('.menu-btn')[4])" class="p-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow font-bold transition-all text-left flex items-center justify-between">
+             <span>Buka Kamera Absensi</span> <span>&rarr;</span>
+           </button>
+        </div>
+      `;
+    }
+
+    async function renderDashboardBendahara() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="flex justify-center items-center h-64">
+           <div class="animate-spin rounded-full h-12 w-12 border-4 border-green-200 border-t-green-600"></div>
+        </div>
+      `;
+
+      // Tarik data secara paralel
+      const [santri, wd, setoran] = await Promise.all([
+        getTableData('Santri'),
+        getTableData('Pencairan'),
+        getTableData('Setoran')
+      ]);
+
+      // Kalkulasi Statistik Bendahara
+      const totalBeredar = santri ? santri.reduce((sum, s) => sum + parseInt(s.saldo||0), 0) : 0;
+      const antreanPencairan = wd ? wd.filter(w => w.status === 'Pending').length : 0;
+      const totalSelesaiPencairan = wd ? wd.filter(w => w.status === 'Selesai').reduce((sum, w) => sum + parseInt(w.nominal||0), 0) : 0;
+      const totalSemuaSetoran = setoran ? setoran.reduce((sum, s) => sum + parseInt(s.nominal||0), 0) : 0;
+
+      document.getElementById('main-content').innerHTML = `
+        <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-2">Selamat Datang, Bendahara! 👋</h2>
+        <p class="text-gray-500 mb-8">Pemantauan cepat arus kas keuangan Bazar hari ini.</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+           <!-- Uang Beredar -->
+           <div class="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-3xl shadow-lg text-white">
+             <div class="flex items-center justify-between mb-4">
+               <p class="text-blue-100 font-bold uppercase tracking-wider text-sm">Saldo Voucher Beredar</p>
+               <span class="text-2xl bg-white/20 p-2 rounded-lg">💳</span>
+             </div>
+             <h3 class="text-4xl font-extrabold mb-1">Rp ${totalBeredar.toLocaleString('id-ID')}</h3>
+             <p class="text-sm text-blue-200 mt-2">Kewajiban tunai yang harus disiapkan</p>
+           </div>
+
+           <!-- Antrean Pencairan (Tarik Dana) -->
+           <div class="bg-gradient-to-br from-orange-500 to-red-600 p-6 rounded-3xl shadow-lg text-white relative overflow-hidden">
+             <div class="flex items-center justify-between mb-4 relative z-10">
+               <p class="text-orange-100 font-bold uppercase tracking-wider text-sm">Antrean Pencairan</p>
+               <span class="text-2xl bg-white/20 p-2 rounded-lg">⏳</span>
+             </div>
+             <h3 class="text-4xl font-extrabold mb-1 relative z-10">${antreanPencairan} <span class="text-lg font-normal">Antrean</span></h3>
+             <p class="text-sm text-orange-100 mt-2 relative z-10">Menunggu persetujuan tunai Anda</p>
+             
+             <!-- Tombol Akses Cepat -->
+             <button onclick="loadMenu(1, document.querySelectorAll('.menu-btn')[1])" class="absolute bottom-4 right-4 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-full font-bold text-sm transition-colors z-10 border border-white/40">
+                Proses Sekarang &rarr;
+             </button>
+           </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+           <div class="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex items-center justify-between">
+             <div>
+               <p class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Pencairan Selesai</p>
+               <h3 class="text-2xl font-extrabold text-emerald-700">Rp ${totalSelesaiPencairan.toLocaleString('id-ID')}</h3>
+             </div>
+             <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-xl">✅</div>
+           </div>
+           
+           <div class="bg-white p-6 rounded-2xl shadow-sm border border-purple-100 flex items-center justify-between">
+             <div>
+               <p class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Total Pemasukan Setoran</p>
+               <h3 class="text-2xl font-extrabold text-purple-700">Rp ${totalSemuaSetoran.toLocaleString('id-ID')}</h3>
+             </div>
+             <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-xl">📥</div>
+           </div>
+        </div>
+      `;
+    }
+    
   </script>
 </body>
 </html>
