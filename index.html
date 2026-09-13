@@ -36,6 +36,17 @@
       mySaldo: 0 // cache untuk saldo pedagang saat ini
     };
     
+    // VARIABEL CACHE GLOBAL: Agar loading tidak muncul berulang
+    const AppCache = {};
+
+    function clearCache(tableName = null) {
+      if (tableName) {
+        delete AppCache[tableName];
+      } else {
+        for (let key in AppCache) delete AppCache[key];
+      }
+    }
+
     // Variabel ini akan diisi dari LocalStorage, sehingga satu frontend
     // bisa dipakai untuk backend web app yang berbeda-beda tanpa hardcoding
     let API_URL = ""; 
@@ -100,8 +111,8 @@
       };
     }
 
-    async function fetchAPI(action, payload = {}) {
-      showLoading();
+    async function fetchAPI(action, payload = {}, silent = false) {
+      if(!silent) showLoading();
       try {
         // PERHATIAN: Kita menggunakan method POST tapi content-type 'text/plain' 
         // Ini adalah cara rahasia menembus batasan CORS Google Apps Script dari domain Vercel.
@@ -112,7 +123,7 @@
         });
         
         const json = await res.json();
-        hideLoading();
+        if(!silent) hideLoading();
         
         if(json.success) {
           return json.data;
@@ -121,11 +132,24 @@
           return null;
         }
       } catch(e) {
-        hideLoading();
+        if(!silent) hideLoading();
         showToast("Gagal menyambung ke Database. Periksa URL Apps Script Anda.", 'error');
         console.error(e);
         return null;
       }
+    }
+
+    // FUNGSI BARU: Ambil data tabel dengan Caching agar klik menu instan
+    async function getTableData(tableName, forceRefresh = false) {
+      if (!forceRefresh && AppCache[tableName]) {
+        return AppCache[tableName];
+      }
+      // Panggil API secara silent (tanpa loading overlay hitam)
+      const data = await fetchAPI('get_data', {table: tableName}, true);
+      if (data) {
+        AppCache[tableName] = data;
+      }
+      return data;
     }
 
     function renderSetupAPI() {
@@ -218,6 +242,7 @@
       const res = await fetchAPI('login', { username: u, password: p });
       if(res) {
         AppState.user = res;
+        clearCache(); // Bersihkan memori cache saat login user baru
         showToast(`Selamat datang, ${res.username}!`);
         renderMainApp();
       }
@@ -389,7 +414,7 @@
         </div>
       `;
       
-      const data = await fetchAPI('get_data', {table: 'Santri'});
+      const data = await getTableData('Santri');
       if (data) {
         document.getElementById('tb-santri').innerHTML = data.map(s => `
           <tr class="hover:bg-gray-50 transition-colors">
@@ -449,6 +474,7 @@
       
       const res = await fetchAPI('save_santri', data);
       if(res) {
+        clearCache('Santri');
         showToast('Data Santri berhasil disimpan');
         closeModal();
         renderMasterSantri();
@@ -458,7 +484,11 @@
     function deleteSantri(id) {
       confirmAction(`Yakin ingin menghapus semua data santri ID: <b>${id}</b>?<br>Tindakan ini tidak dapat dibatalkan.`, async () => {
         const res = await fetchAPI('delete_santri', {id});
-        if(res) { showToast('Data berhasil dihapus selamanya'); renderMasterSantri(); }
+        if(res) { 
+           clearCache('Santri');
+           showToast('Data berhasil dihapus selamanya'); 
+           renderMasterSantri(); 
+        }
       });
     }
 
@@ -543,7 +573,7 @@
         </div>
       `;
       
-      const data = await fetchAPI('get_data', {table: 'Pedagang'});
+      const data = await getTableData('Pedagang');
       if (data) {
         document.getElementById('tb-pedagang').innerHTML = data.map(p => `
           <tr class="hover:bg-gray-50 transition-colors">
@@ -603,6 +633,7 @@
       
       const res = await fetchAPI('save_pedagang', data);
       if(res) {
+        clearCache('Pedagang');
         showToast('Mitra Pedagang berhasil diperbarui');
         closeModal();
         renderMasterPedagang();
@@ -612,7 +643,11 @@
     function deletePedagang(id) {
       confirmAction(`Anda yakin ingin menghapus izin dan akun pedagang <b>${id}</b>?<br>Akun login untuk pedagang ini juga akan hangus.`, async () => {
         const res = await fetchAPI('delete_pedagang', {id});
-        if(res) { showToast('Pedagang telah diberhentikan'); renderMasterPedagang(); }
+        if(res) { 
+           clearCache('Pedagang');
+           showToast('Pedagang telah diberhentikan'); 
+           renderMasterPedagang(); 
+        }
       });
     }
 
@@ -657,7 +692,7 @@
         </div>
       `;
       
-      const data = await fetchAPI('get_data', {table: 'Pedagang'});
+      const data = await getTableData('Pedagang');
       if (data) {
         document.getElementById('tb-jadwal').innerHTML = data.map((p, index) => `
           <tr class="hover:bg-gray-50 transition-colors cursor-pointer" onclick="document.getElementById('cb-${p.id_pedagang}').click()">
@@ -693,6 +728,7 @@
       confirmAction(`Anda akan mengatur <b>${activeIds.length} pedagang</b> menjadi AKTIF, dan sisanya diliburkan.<br>Lanjutkan?`, async () => {
         const res = await fetchAPI('set_jadwal', { active_ids: activeIds });
         if(res) {
+          clearCache('Pedagang');
           showToast('Jadwal rolling pedagang berhasil disimpan!');
           renderJadwalPedagang(); // Refresh UI
         }
@@ -743,10 +779,10 @@
         </div>
       `;
       
-      // Ambil data secara paralel untuk mempercepat loading SPA
+      // Ambil data secara paralel dari cache untuk mempercepat loading SPA
       const [santriData, trxData] = await Promise.all([
-        fetchAPI('get_data', {table: 'Santri'}),
-        fetchAPI('get_data', {table: 'Transaksi'})
+        getTableData('Santri'),
+        getTableData('Transaksi')
       ]);
       
       if (santriData && trxData) {
@@ -799,7 +835,7 @@
         </div>
       `;
       
-      const data = await fetchAPI('get_data', {table: 'Pencairan'});
+      const data = await getTableData('Pencairan');
       if (data) {
         // Tampilkan yang Pending di atas, lalu Selesai di bawah
         data.sort((a, b) => (a.status === 'Pending' ? -1 : 1));
@@ -829,6 +865,7 @@
       confirmAction(`Apakah Anda sudah memastikan uang tunai diserahkan ke pedagang untuk kode <b>${id}</b>?`, async () => {
         const res = await fetchAPI('approve_pencairan', {id_pencairan: id});
         if(res) { 
+          clearCache('Pencairan');
           showToast('Status pencairan berhasil ditandai selesai.'); 
           renderApprovePencairan(); 
         }
@@ -892,7 +929,7 @@
       infoBox.classList.remove('hidden');
       namaEl.innerHTML = '<span class="animate-pulse">Mencari data di server...</span>';
       
-      const data = await fetchAPI('get_data', {table: 'Santri'});
+      const data = await getTableData('Santri');
       if(data) {
         // Cari berdasarkan ID persis atau Nama (mengandung kata yang diketik)
         const santri = data.find(s => 
@@ -938,6 +975,8 @@
       confirmAction(`Konfirmasi eksekusi topup:<br><br>Santri: <b>${data.id_santri}</b><br>Nominal: <b>Rp ${parseInt(data.nominal).toLocaleString('id-ID')}</b><br>Referensi: <b>${data.struk || '-'}</b>`, async () => {
         const res = await fetchAPI('topup', data);
         if(res) {
+          clearCache('Santri'); // Reset cache setelah topup berhasil
+          clearCache('Topup');
           showToast('Isi saldo sukses! Mesin EDC siap untuk transaksi selanjutnya.');
           // Tampilkan notif sukses besar
           document.getElementById('main-content').innerHTML = `
@@ -981,7 +1020,7 @@
         </div>
       `;
       
-      const pData = await fetchAPI('get_data', {table: 'Pedagang'});
+      const pData = await getTableData('Pedagang');
       if(pData) {
         const me = pData.find(p => p.id_pedagang === AppState.user.id_ref);
         if(me) {
@@ -1039,9 +1078,14 @@
             </div>
 
             <div class="mb-5">
-              <label class="block text-gray-700 font-bold mb-2 text-sm">QR Code / ID Pembeli</label>
-              <input type="text" id="j-id" class="w-full bg-gray-50 border-2 border-gray-200 focus:border-blue-500 p-4 rounded-xl outline-none font-mono uppercase text-lg" placeholder="SNT-XXXX" autofocus>
+              <label class="block text-gray-700 font-bold mb-2 text-sm">QR Code / ID Pembeli / Nama Santri</label>
+              <div class="flex gap-2">
+                <input type="text" id="j-id" class="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-blue-500 p-4 rounded-xl outline-none text-lg" placeholder="SNT-XXXX atau Nama" autofocus>
+                <button type="button" onclick="cekSantriPedagang()" class="bg-gray-800 hover:bg-black text-white px-5 rounded-xl font-bold transition-colors shadow-md">Cari</button>
+              </div>
+              <div id="j-info-box" class="mt-3 p-3 rounded-xl bg-gray-50 border border-gray-100 hidden"></div>
             </div>
+            
             <div class="mb-8">
               <label class="block text-gray-700 font-bold mb-2 text-sm">Total Belanjaan</label>
               <div class="relative">
@@ -1061,6 +1105,45 @@
           </button>
         </div>
       `;
+    }
+
+    async function cekSantriPedagang() {
+      const query = document.getElementById('j-id').value.trim();
+      if(!query) return;
+      
+      const infoBox = document.getElementById('j-info-box');
+      
+      infoBox.classList.remove('hidden');
+      infoBox.innerHTML = '<span class="animate-pulse text-gray-500 text-sm font-medium">Mencari data santri...</span>';
+      
+      const data = await getTableData('Santri');
+      if(data) {
+        // Cari berdasarkan ID persis atau Nama (mengandung kata yang diketik)
+        const santri = data.find(s => 
+          s.id_santri.toUpperCase() === query.toUpperCase() || 
+          s.nama.toLowerCase().includes(query.toLowerCase())
+        );
+
+        if(santri) {
+           // Timpa input dengan ID asli agar proses pemotongan saldo tidak error
+           document.getElementById('j-id').value = santri.id_santri;
+           
+           infoBox.classList.remove('bg-red-50', 'border-red-100');
+           infoBox.classList.add('bg-green-50', 'border-green-200');
+           infoBox.innerHTML = `
+             <div>
+                 <span class="font-bold text-green-800 text-lg">✅ ${santri.nama}</span> <br>
+                 <span class="text-sm font-medium text-green-700">Saldo saat ini: Rp ${parseInt(santri.saldo||0).toLocaleString('id-ID')}</span>
+             </div>
+           `;
+           // Arahkan kursor langsung ke kotak pengisian Harga
+           document.getElementById('j-nom').focus();
+        } else {
+           infoBox.classList.remove('bg-green-50', 'border-green-200');
+           infoBox.classList.add('bg-red-50', 'border-red-100');
+           infoBox.innerHTML = '❌ <span class="text-red-600 text-sm font-bold">Data Santri tidak ditemukan!</span>';
+        }
+      }
     }
 
     // Variabel global untuk menyimpan state kamera
@@ -1149,6 +1232,9 @@
       
       const res = await fetchAPI('jajan', data);
       if(res) {
+        clearCache('Santri'); // Reset cache setelah ada perubahan
+        clearCache('Pedagang');
+        clearCache('Transaksi');
         showToast('Transaksi Berhasil! Saldo pedagang bertambah.');
         
         // Tampilkan success check kecil
@@ -1227,10 +1313,10 @@
         </div>
       `;
       
-      // Ambil saldo fresh dan riwayat WD
+      // Ambil saldo fresh dan riwayat WD (Menggunakan Cache agar instan)
       const [pData, wData] = await Promise.all([
-        fetchAPI('get_data', {table: 'Pedagang'}),
-        fetchAPI('get_data', {table: 'Pencairan'})
+        getTableData('Pedagang'),
+        getTableData('Pencairan')
       ]);
       
       if(pData) {
@@ -1266,6 +1352,8 @@
       confirmAction(`Ajukan pencairan sebesar <b>Rp ${nom.toLocaleString('id-ID')}</b> kepada Bendahara?`, async () => {
         const res = await fetchAPI('ajukan_pencairan', { id_pedagang: AppState.user.id_ref, nominal: nom });
         if(res) {
+          clearCache('Pedagang');
+          clearCache('Pencairan');
           showToast('Pengajuan berhasil! Silakan temui Bendahara untuk serah terima tunai.');
           renderAjukanWD(); // Refresh UI
         }
