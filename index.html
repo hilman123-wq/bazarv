@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bazar Al-Islam (Non-Tunai)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    /* Styling scrollbar tipis agar modern */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased overflow-hidden">
+  
+  <!-- Container Utama Aplikasi -->
+  <div id="app"></div>
+
+  <!-- Modal Container Universal -->
+  <div id="modal-container"></div>
+  
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-80 flex flex-col items-center justify-center z-50 hidden transition-opacity duration-300">
+    <div class="animate-spin rounded-full h-12 w-12 border-4 border-green-200 border-t-green-600 mb-4"></div>
+    <p class="text-green-800 font-semibold animate-pulse tracking-wide">Menyinkronkan Data...</p>
+  </div>
+
+  <script>
+    const AppState = {
+      user: null, 
+      mySaldo: 0 // cache untuk saldo pedagang saat ini
+    };
+    
+    // Variabel ini akan diisi dari LocalStorage, sehingga satu frontend
+    // bisa dipakai untuk backend web app yang berbeda-beda tanpa hardcoding
+    let API_URL = ""; 
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const savedAPI = localStorage.getItem('BAZAR_API_URL');
+      if(!savedAPI) {
+        renderSetupAPI(); // Pertama kali dibuka, minta URL
+      } else {
+        API_URL = savedAPI;
+        renderLogin();    // Sudah ada URL, arahkan ke Login
+      }
+    });
+
+    function showLoading() { document.getElementById('loading-overlay').classList.remove('hidden'); }
+    function hideLoading() { document.getElementById('loading-overlay').classList.add('hidden'); }
+
+    function showToast(msg, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `fixed top-6 right-6 px-6 py-4 rounded-lg text-white shadow-xl z-[9999] transform transition-all translate-y-0 opacity-100 flex items-center ${type === 'error' ? 'bg-red-500' : 'bg-emerald-600'}`;
+      toast.innerHTML = `<span class="mr-2">${type==='error'?'❌':'✅'}</span> <span class="font-medium">${msg}</span>`;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('-translate-y-4', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function openModal(title, contentHTML) {
+      const container = document.getElementById('modal-container');
+      container.innerHTML = `
+        <div id="dynamic-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-40 p-4 transition-opacity">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-100">
+            <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100">
+              <h3 class="text-xl font-bold text-gray-800">${title}</h3>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors font-bold text-xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 max-h-[75vh] overflow-y-auto">
+              ${contentHTML}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function closeModal() {
+      document.getElementById('modal-container').innerHTML = '';
+    }
+
+    function confirmAction(message, callback) {
+      const html = `
+        <p class="mb-6 text-gray-600 text-lg">${message}</p>
+        <div class="flex justify-end gap-3">
+          <button onclick="closeModal()" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors">Batal</button>
+          <button id="btn-confirm-ok" class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg shadow-md transition-colors">Ya, Lanjutkan</button>
+        </div>
+      `;
+      openModal('Konfirmasi Tindakan', html);
+      document.getElementById('btn-confirm-ok').onclick = () => {
+        closeModal();
+        callback();
+      };
+    }
+
+    async function fetchAPI(action, payload = {}) {
+      showLoading();
+      try {
+        // PERHATIAN: Kita menggunakan method POST tapi content-type 'text/plain' 
+        // Ini adalah cara rahasia menembus batasan CORS Google Apps Script dari domain Vercel.
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          body: JSON.stringify({ action, data: payload }),
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        });
+        
+        const json = await res.json();
+        hideLoading();
+        
+        if(json.success) {
+          return json.data;
+        } else {
+          showToast(json.error, 'error');
+          return null;
+        }
+      } catch(e) {
+        hideLoading();
+        showToast("Gagal menyambung ke Database. Periksa URL Apps Script Anda.", 'error');
+        console.error(e);
+        return null;
+      }
+    }
+
+    function renderSetupAPI() {
+      const current = localStorage.getItem('BAZAR_API_URL') || '';
+      document.getElementById('app').innerHTML = `
+        <div class="flex min-h-screen items-center justify-center bg-gray-100 p-4">
+           <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg border border-gray-100">
+              <div class="flex items-center mb-6">
+                <div class="bg-blue-100 p-3 rounded-full mr-4 text-blue-600 text-2xl">🔗</div>
+                <h2 class="text-2xl font-bold text-gray-800">Setup Database</h2>
+              </div>
+              
+              <p class="text-sm mb-6 text-gray-600 leading-relaxed bg-blue-50 p-4 rounded-lg">
+                Karena frontend ini berada di Vercel, kita perlu menyambungkannya dengan backend (Google Apps Script). 
+                Masukkan <b>URL Web App</b> yang Anda dapatkan setelah melakukan Deploy di Google Apps Script.
+              </p>
+              
+              <input type="text" id="api-url-input" class="w-full border-2 border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 p-3 rounded-lg mb-6 outline-none transition-all" placeholder="https://script.google.com/macros/s/AKfycb.../exec" value="${current}">
+              
+              <div class="flex gap-3">
+                <button onclick="saveAPIUrl()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-lg shadow-md transition-colors">Simpan Endpoint</button>
+                ${current ? `<button onclick="renderLogin()" class="px-6 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold p-3 rounded-lg transition-colors">Batal</button>` : ''}
+              </div>
+              <p class="mt-6 text-xs text-center text-gray-400 cursor-pointer hover:text-blue-500" onclick="window.open(document.getElementById('api-url-input').value+'?action=setup', '_blank')">Klik di sini untuk Auto-Generate Table jika URL baru ditambahkan</p>
+           </div>
+        </div>
+      `;
+    }
+
+    function saveAPIUrl() {
+      const url = document.getElementById('api-url-input').value.trim();
+      if(!url.startsWith('https://script.google.com/')) {
+        return showToast('Format URL Apps Script tidak valid! Harus berawalan https://script.google.com/...', 'error');
+      }
+      localStorage.setItem('BAZAR_API_URL', url);
+      API_URL = url;
+      showToast('Endpoint Database berhasil diamankan');
+      renderLogin();
+    }
+
+    function renderLogin() {
+      document.getElementById('app').innerHTML = `
+        <div class="flex min-h-screen flex-col md:flex-row bg-green-50">
+          
+          <div class="absolute top-4 right-4 z-10 text-green-800 bg-white/50 backdrop-blur px-4 py-2 rounded-full cursor-pointer font-medium hover:bg-white shadow-sm transition-all text-sm" onclick="renderSetupAPI()">⚙️ Pengaturan API</div>
+          
+          <!-- Banner Section (Desktop) -->
+          <div class="md:flex-1 bg-green-800 text-white p-12 flex-col justify-center hidden md:flex relative overflow-hidden">
+             <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] opacity-10"></div>
+             <div class="relative z-10">
+               <h1 class="text-5xl font-extrabold mb-6 leading-tight">Sistem Bazar Digital<br>Ponpes Al-Islam</h1>
+               <p class="text-xl text-green-100 leading-relaxed font-light">
+                 Mengubah transaksi tunai menjadi digital menggunakan voucher QR Code. Aman, Cepat, dan Transparan.
+               </p>
+             </div>
+          </div>
+
+          <!-- Form Login Section -->
+          <div class="flex-1 flex items-center justify-center p-6 bg-white relative shadow-[-10px_0_30px_rgba(0,0,0,0.05)]">
+             <div class="w-full max-w-sm">
+                <div class="text-center mb-8 md:hidden">
+                   <h2 class="text-3xl font-extrabold text-green-800">Bazar Al-Islam</h2>
+                   <p class="text-gray-500 mt-2">Masuk ke Sistem</p>
+                </div>
+                
+                <h3 class="text-2xl font-bold text-gray-800 mb-6 hidden md:block">Masuk ke Akun Anda</h3>
+                
+                <form onsubmit="doLogin(event)" class="space-y-5">
+                  <div>
+                    <label class="block text-gray-700 font-medium mb-1.5 text-sm">Username / ID Pegawai</label>
+                    <input type="text" id="val-u" class="w-full bg-gray-50 border border-gray-300 focus:border-green-500 focus:bg-white p-3.5 rounded-xl outline-none transition-all shadow-sm" required placeholder="Masukkan username">
+                  </div>
+                  <div>
+                    <label class="block text-gray-700 font-medium mb-1.5 text-sm">Kata Sandi</label>
+                    <input type="password" id="val-p" class="w-full bg-gray-50 border border-gray-300 focus:border-green-500 focus:bg-white p-3.5 rounded-xl outline-none transition-all shadow-sm" required placeholder="••••••••">
+                  </div>
+                  <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-[0_4px_14px_0_rgba(22,163,74,0.39)] hover:shadow-[0_6px_20px_rgba(22,163,74,0.23)] hover:-translate-y-0.5 transition-all mt-4">Login Sekarang</button>
+                </form>
+             </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function doLogin(e) {
+      e.preventDefault();
+      const u = document.getElementById('val-u').value;
+      const p = document.getElementById('val-p').value;
+      
+      const res = await fetchAPI('login', { username: u, password: p });
+      if(res) {
+        AppState.user = res;
+        showToast(`Selamat datang, ${res.username}!`);
+        renderMainApp();
+      }
+    }
+
+    function logout() {
+      AppState.user = null;
+      renderLogin();
+    }
+
+    const RoleMenus = {
+      admin: [
+        { id: 'master_santri', icon: '👨‍🎓', label: 'Master Santri', action: renderMasterSantri },
+        { id: 'master_pedagang', icon: '🏪', label: 'Master Pedagang', action: renderMasterPedagang },
+        { id: 'laporan_admin', icon: '📊', label: 'Laporan Global', action: renderLaporanGlobal }
+      ],
+      bendahara: [
+        { id: 'pencairan_dana', icon: '💸', label: 'Pencairan Dana', action: renderApprovePencairan },
+        { id: 'laporan_bendahara', icon: '📉', label: 'Laporan Keuangan', action: renderLaporanGlobal }
+      ],
+      pedagang: [
+        { id: 'jajan_input', icon: '🛒', label: 'Proses Jajan', action: renderInputJajan },
+        { id: 'ajukan_wd', icon: '💰', label: 'Ajukan Pencairan', action: renderAjukanWD }
+      ],
+      edc: [
+        { id: 'topup_saldo', icon: '💳', label: 'Topup Voucher', action: renderTopup }
+      ]
+    };
+
+    function renderMainApp() {
+      document.getElementById('app').innerHTML = `
+        <div class="flex h-screen bg-gray-50 font-sans overflow-hidden">
+          
+          <!-- Sidebar -->
+          <aside class="w-72 bg-gray-900 text-gray-300 flex flex-col shadow-2xl transition-transform duration-300 transform md:translate-x-0 -translate-x-full absolute md:relative z-30 h-full" id="sidebar">
+            <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+              <div class="flex items-center gap-3">
+                 <div class="bg-green-500 w-8 h-8 rounded flex items-center justify-center text-white font-bold">A</div>
+                 <span class="text-xl font-bold text-white tracking-wide">Bazar Apps</span>
+              </div>
+              <button class="md:hidden text-gray-400 hover:text-white" onclick="toggleSidebar()">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            
+            <div class="p-5 border-b border-gray-800 bg-gray-900 flex items-center gap-4">
+              <div class="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center text-xl font-bold text-green-400 border border-green-500/30">
+                 ${AppState.user.username.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p class="text-white font-semibold">${AppState.user.username}</p>
+                <p class="text-xs text-green-500 bg-green-500/10 inline-block px-2 py-0.5 rounded-full mt-1 border border-green-500/20">${AppState.user.role.toUpperCase()}</p>
+              </div>
+            </div>
+            
+            <div class="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Menu Navigasi</div>
+            <nav class="flex-1 overflow-y-auto px-3 pb-4 space-y-1" id="sidebar-nav"></nav>
+            
+            <div class="p-4 border-t border-gray-800">
+               <button onclick="logout()" class="w-full flex items-center justify-center gap-2 p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors font-medium">
+                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                 Keluar Sistem
+               </button>
+            </div>
+          </aside>
+          
+          <!-- Area Konten -->
+          <div class="flex-1 flex flex-col h-screen overflow-hidden relative">
+            
+            <!-- Mobile Header -->
+            <header class="bg-white shadow-sm border-b border-gray-200 p-4 flex md:hidden items-center justify-between z-20">
+              <div class="flex items-center gap-3">
+                 <button onclick="toggleSidebar()" class="text-gray-800 focus:outline-none p-1 bg-gray-100 rounded-md">
+                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                 </button>
+                 <span class="text-lg font-bold text-gray-800">Bazar Apps</span>
+              </div>
+              <div class="w-8 h-8 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold text-sm border border-green-200">
+                 ${AppState.user.username.charAt(0).toUpperCase()}
+              </div>
+            </header>
+            
+            <!-- Tempat merender View -->
+            <main class="flex-1 p-4 md:p-8 overflow-y-auto w-full relative" id="main-content"></main>
+            
+            <!-- Overlay untuk mematikan sidebar saat mobile -->
+            <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden transition-opacity"></div>
+          </div>
+        </div>
+      `;
+      
+      const roleMenus = RoleMenus[AppState.user.role];
+      if(!roleMenus) return showToast('Hak Akses Role tidak dikenali', 'error');
+      
+      const nav = document.getElementById('sidebar-nav');
+      nav.innerHTML = roleMenus.map((m, i) => `
+        <button onclick="loadMenu(${i}, this)" class="menu-btn w-full flex items-center gap-3 text-left px-4 py-3 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-all">
+          <span class="text-xl">${m.icon}</span> 
+          <span class="font-medium">${m.label}</span>
+        </button>
+      `).join('');
+      
+      // Jika pedagang, tampilkan Info Khusus Jadwal Dagang sebagai home, jika bukan muat menu indeks 0
+      if(AppState.user.role === 'pedagang') {
+         renderDashboardPedagang();
+      } else {
+         loadMenu(0, document.querySelector('.menu-btn'));
+      }
+    }
+
+    function toggleSidebar() {
+      const sb = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      if(sb.classList.contains('-translate-x-full')) {
+         sb.classList.remove('-translate-x-full');
+         overlay.classList.remove('hidden');
+      } else {
+         sb.classList.add('-translate-x-full');
+         overlay.classList.add('hidden');
+      }
+    }
+
+    function loadMenu(index, btnEl) {
+      // Styling tombol menu aktif
+      if(btnEl) {
+        document.querySelectorAll('.menu-btn').forEach(b => {
+          b.classList.remove('bg-gray-800', 'text-white', 'shadow-inner');
+          b.classList.add('text-gray-400');
+        });
+        btnEl.classList.remove('text-gray-400');
+        btnEl.classList.add('bg-gray-800', 'text-white', 'shadow-inner');
+      }
+      
+      const roleMenus = RoleMenus[AppState.user.role];
+      if(window.innerWidth < 768) toggleSidebar();
+      roleMenus[index].action();
+    }
+
+    async function renderMasterSantri() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+           <div>
+             <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight">Master Data Santri</h2>
+             <p class="text-gray-500 mt-1">Kelola data peserta bazar dan saldo vouchernya.</p>
+           </div>
+           <button onclick="openModalSantri()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors">
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> Tambah Santri Baru
+           </button>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+           <div class="overflow-x-auto">
+             <table class="w-full text-left whitespace-nowrap">
+               <thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-xs font-bold tracking-wider">
+                 <tr>
+                   <th class="px-6 py-4">ID Santri</th>
+                   <th class="px-6 py-4">Nama Lengkap</th>
+                   <th class="px-6 py-4">Rayon</th>
+                   <th class="px-6 py-4 text-right">Saldo (Rp)</th>
+                   <th class="px-6 py-4 text-center">Aksi / Cetak</th>
+                 </tr>
+               </thead>
+               <tbody id="tb-santri" class="divide-y divide-gray-100">
+                 <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500"><div class="animate-pulse flex flex-col items-center"><div class="h-4 bg-gray-200 rounded w-1/4 mb-2"></div><div class="h-4 bg-gray-100 rounded w-1/3"></div></div></td></tr>
+               </tbody>
+             </table>
+           </div>
+        </div>
+      `;
+      
+      const data = await fetchAPI('get_data', {table: 'Santri'});
+      if (data) {
+        document.getElementById('tb-santri').innerHTML = data.map(s => `
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${s.id_santri}</td>
+            <td class="px-6 py-4">${s.nama}</td>
+            <td class="px-6 py-4"><span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">${s.rayon}</span></td>
+            <td class="px-6 py-4 text-right font-mono font-medium text-green-600">${parseInt(s.saldo||0).toLocaleString('id-ID')}</td>
+            <td class="px-6 py-4 text-center space-x-2">
+              <button onclick="showQR('${s.id_santri}', '${s.nama}')" class="text-gray-500 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors">🖨️ QR</button>
+              <button onclick='openModalSantri(${JSON.stringify(s)})' class="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-sm font-medium transition-colors">Edit</button>
+              <button onclick="deleteSantri('${s.id_santri}')" class="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-sm font-medium transition-colors">Hapus</button>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Belum ada data santri terdaftar.</td></tr>';
+      }
+    }
+
+    function openModalSantri(santri = null) {
+      const html = `
+        <input type="hidden" id="f-isnew" value="${santri ? 'false' : 'true'}">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">ID Santri (QR Code Text)</label>
+            <input type="text" id="f-id" value="${santri?.id_santri || `SNT-${new Date().getTime().toString().slice(-4)}`}" class="w-full bg-gray-50 border border-gray-300 focus:border-blue-500 p-2.5 rounded-lg outline-none" ${santri ? 'readonly' : ''}>
+            ${santri ? '<p class="text-xs text-gray-400 mt-1">ID tidak dapat diubah setelah dibuat.</p>' : ''}
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap Santri</label>
+            <input type="text" id="f-nama" value="${santri?.nama || ''}" class="w-full border border-gray-300 focus:border-blue-500 p-2.5 rounded-lg outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Rayon / Asrama</label>
+            <input type="text" id="f-rayon" value="${santri?.rayon || ''}" class="w-full border border-gray-300 focus:border-blue-500 p-2.5 rounded-lg outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Saldo Awal (Opsional - Rp)</label>
+            <input type="number" id="f-saldo" value="${santri?.saldo || 0}" class="w-full border border-gray-300 focus:border-blue-500 p-2.5 rounded-lg outline-none">
+          </div>
+          <button onclick="submitSantri()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors mt-6">Simpan Data Santri</button>
+        </div>
+      `;
+      openModal(santri ? '✍️ Edit Data Santri' : '➕ Registrasi Santri', html);
+    }
+
+    async function submitSantri() {
+      const isNew = document.getElementById('f-isnew').value === 'true';
+      const data = {
+        is_new: isNew,
+        id_santri: document.getElementById('f-id').value.trim(),
+        nama: document.getElementById('f-nama').value.trim(),
+        rayon: document.getElementById('f-rayon').value.trim(),
+        saldo: document.getElementById('f-saldo').value
+      };
+      
+      if(!data.id_santri || !data.nama || !data.rayon) return showToast('Harap lengkapi semua kolom form', 'error');
+      
+      const res = await fetchAPI('save_santri', data);
+      if(res) {
+        showToast('Data Santri berhasil disimpan');
+        closeModal();
+        renderMasterSantri();
+      }
+    }
+
+    function deleteSantri(id) {
+      confirmAction(`Yakin ingin menghapus semua data santri ID: <b>${id}</b>?<br>Tindakan ini tidak dapat dibatalkan.`, async () => {
+        const res = await fetchAPI('delete_santri', {id});
+        if(res) { showToast('Data berhasil dihapus selamanya'); renderMasterSantri(); }
+      });
+    }
+
+    function showQR(id_santri, nama) {
+      const html = `
+        <div class="flex flex-col items-center py-4">
+           <h4 class="text-xl font-bold text-gray-800">${nama}</h4>
+           <p class="text-gray-500 mb-6 tracking-widest text-sm">${id_santri}</p>
+           
+           <div id="qr-container" class="p-4 bg-white border-4 border-gray-100 rounded-xl shadow-sm mb-6 inline-block"></div>
+           
+           <p class="text-xs text-center text-gray-400 bg-gray-50 p-3 rounded-lg border border-gray-100">
+             Cetak kode QR ini dan tempelkan pada Kartu Tanda Santri atau kalung ID sebagai alat pembayaran sah di area Bazar.
+           </p>
+        </div>
+      `;
+      openModal('Cetak Kartu Voucher QR', html);
+      
+      // Delay sedikit agar DOM Modal selesai dimuat sebelum merender Canvas QR
+      setTimeout(() => {
+        new QRCode(document.getElementById("qr-container"), {
+          text: id_santri,
+          width: 220,
+          height: 220,
+          colorDark : "#111827",
+          colorLight : "#ffffff",
+          correctLevel : QRCode.CorrectLevel.H
+        });
+      }, 200);
+    }
+
+    async function renderMasterPedagang() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+           <div>
+             <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight">Kemitraan Pedagang</h2>
+             <p class="text-gray-500 mt-1">Kelola data stan, kantin dan pedagang bazar.</p>
+           </div>
+           <button onclick="openModalPedagang()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors">
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> Mitra Pedagang Baru
+           </button>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+           <div class="overflow-x-auto">
+             <table class="w-full text-left whitespace-nowrap">
+               <thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-xs font-bold tracking-wider">
+                 <tr>
+                   <th class="px-6 py-4">ID Pedagang</th>
+                   <th class="px-6 py-4">Nama Toko/Kantin</th>
+                   <th class="px-6 py-4">Jenis Dagangan</th>
+                   <th class="px-6 py-4 text-right">Saldo Terkumpul</th>
+                   <th class="px-6 py-4 text-center">Manajemen</th>
+                 </tr>
+               </thead>
+               <tbody id="tb-pedagang" class="divide-y divide-gray-100">
+                 <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Memuat data mitra...</td></tr>
+               </tbody>
+             </table>
+           </div>
+        </div>
+      `;
+      
+      const data = await fetchAPI('get_data', {table: 'Pedagang'});
+      if (data) {
+        document.getElementById('tb-pedagang').innerHTML = data.map(p => `
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${p.id_pedagang}</td>
+            <td class="px-6 py-4 font-semibold">${p.nama}</td>
+            <td class="px-6 py-4 text-gray-600">${p.jualan}</td>
+            <td class="px-6 py-4 text-right font-mono font-bold text-emerald-600">Rp ${parseInt(p.saldo||0).toLocaleString('id-ID')}</td>
+            <td class="px-6 py-4 text-center space-x-2">
+              <button onclick='openModalPedagang(${JSON.stringify(p)})' class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-sm font-medium transition-colors">Edit</button>
+              <button onclick="deletePedagang('${p.id_pedagang}')" class="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-sm font-medium transition-colors">Cabut Izin</button>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Belum ada mitra pedagang.</td></tr>';
+      }
+    }
+
+    function openModalPedagang(p = null) {
+      const html = `
+        <input type="hidden" id="p-isnew" value="${p ? 'false' : 'true'}">
+        <div class="space-y-4">
+          ${p ? '' : `<div class="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 border border-blue-100 mb-4">
+             <b>Info Otomatis:</b> Akun login (User) untuk pedagang baru ini akan otomatis dibuat.<br><b>Username:</b> (Sesuai ID) | <b>Password:</b> 123456
+          </div>`}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">ID Pedagang / Stan</label>
+            <input type="text" id="p-id" value="${p?.id_pedagang || `PDG${new Date().getTime().toString().slice(-4)}`}" class="w-full bg-gray-50 border border-gray-300 focus:border-emerald-500 p-2.5 rounded-lg outline-none uppercase" ${p ? 'readonly' : ''}>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Nama Pemilik / Kantin</label>
+            <input type="text" id="p-nama" value="${p?.nama || ''}" class="w-full border border-gray-300 focus:border-emerald-500 p-2.5 rounded-lg outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Daftar Menu Jualan (Singkat)</label>
+            <input type="text" id="p-jualan" value="${p?.jualan || ''}" class="w-full border border-gray-300 focus:border-emerald-500 p-2.5 rounded-lg outline-none" placeholder="Cth: Nasi Kuning, Es Teh">
+          </div>
+          <div class="${p ? '' : 'hidden'}">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Penyesuaian Saldo (Rp)</label>
+            <input type="number" id="p-saldo" value="${p?.saldo || 0}" class="w-full bg-gray-50 border border-gray-300 p-2.5 rounded-lg outline-none">
+          </div>
+          <button onclick="submitPedagang()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors mt-6">Simpan Kemitraan</button>
+        </div>
+      `;
+      openModal(p ? '✍️ Edit Data Pedagang' : '➕ Registrasi Pedagang Baru', html);
+    }
+
+    async function submitPedagang() {
+      const isNew = document.getElementById('p-isnew').value === 'true';
+      const data = {
+        is_new: isNew,
+        id_pedagang: document.getElementById('p-id').value.trim().toUpperCase(),
+        nama: document.getElementById('p-nama').value.trim(),
+        jualan: document.getElementById('p-jualan').value.trim(),
+        saldo: document.getElementById('p-saldo') ? document.getElementById('p-saldo').value : 0
+      };
+      
+      if(!data.id_pedagang || !data.nama) return showToast('Form Nama dan ID wajib diisi', 'error');
+      
+      const res = await fetchAPI('save_pedagang', data);
+      if(res) {
+        showToast('Mitra Pedagang berhasil diperbarui');
+        closeModal();
+        renderMasterPedagang();
+      }
+    }
+
+    function deletePedagang(id) {
+      confirmAction(`Anda yakin ingin menghapus izin dan akun pedagang <b>${id}</b>?<br>Akun login untuk pedagang ini juga akan hangus.`, async () => {
+        const res = await fetchAPI('delete_pedagang', {id});
+        if(res) { showToast('Pedagang telah diberhentikan'); renderMasterPedagang(); }
+      });
+    }
+
+    async function renderLaporanGlobal() {
+      document.getElementById('main-content').innerHTML = `
+        <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-2">Laporan & Statistik</h2>
+        <p class="text-gray-500 mb-8">Pemantauan perputaran uang voucher elektronik.</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+           <div class="bg-gradient-to-br from-blue-500 to-blue-700 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
+             <svg class="absolute -right-4 -bottom-4 w-32 h-32 text-blue-400 opacity-30" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
+             <p class="text-blue-100 font-medium mb-1">Total Uang Beredar (Saldo Santri Aktif)</p>
+             <div id="card-beredar" class="text-4xl font-extrabold flex items-baseline">
+                <span class="text-2xl mr-2">Rp</span> <span class="animate-pulse bg-blue-400/50 h-10 w-32 rounded"></span>
+             </div>
+           </div>
+           
+           <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
+             <svg class="absolute -right-4 -bottom-4 w-32 h-32 text-emerald-400 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+             <p class="text-emerald-100 font-medium mb-1">Volume Transaksi Jajan (All Time)</p>
+             <div id="card-trx" class="text-4xl font-extrabold flex items-baseline">
+                <span class="text-2xl mr-2">Rp</span> <span class="animate-pulse bg-emerald-400/50 h-10 w-32 rounded"></span>
+             </div>
+           </div>
+        </div>
+        
+        <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3">Log Transaksi Terakhir</h3>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+           <div class="overflow-x-auto">
+             <table class="w-full text-left whitespace-nowrap">
+               <thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-xs font-bold tracking-wider">
+                 <tr>
+                   <th class="px-6 py-4">ID Transaksi</th>
+                   <th class="px-6 py-4">Waktu Eksekusi</th>
+                   <th class="px-6 py-4">Pembeli (ID Santri)</th>
+                   <th class="px-6 py-4">Merchant (ID Pedagang)</th>
+                   <th class="px-6 py-4 text-right">Nilai Transaksi</th>
+                 </tr>
+               </thead>
+               <tbody id="table-riwayat" class="divide-y divide-gray-100">
+                 <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Memuat log transaksi...</td></tr>
+               </tbody>
+             </table>
+           </div>
+        </div>
+      `;
+      
+      // Ambil data secara paralel untuk mempercepat loading SPA
+      const [santriData, trxData] = await Promise.all([
+        fetchAPI('get_data', {table: 'Santri'}),
+        fetchAPI('get_data', {table: 'Transaksi'})
+      ]);
+      
+      if (santriData && trxData) {
+         const totalBeredar = santriData.reduce((sum, s) => sum + parseInt(s.saldo||0), 0);
+         const totalTrx = trxData.reduce((sum, t) => sum + parseInt(t.nominal||0), 0);
+         
+         document.getElementById('card-beredar').innerHTML = `<span class="text-2xl mr-2">Rp</span> ${totalBeredar.toLocaleString('id-ID')}`;
+         document.getElementById('card-trx').innerHTML = `<span class="text-2xl mr-2">Rp</span> ${totalTrx.toLocaleString('id-ID')}`;
+         
+         // Ambil 15 transaksi terbaru
+         const recentTrx = trxData.reverse().slice(0, 15);
+         
+         document.getElementById('table-riwayat').innerHTML = recentTrx.map(t => `
+           <tr class="hover:bg-gray-50">
+             <td class="px-6 py-4 text-xs font-mono text-gray-500">${t.id_trx}</td>
+             <td class="px-6 py-4 text-sm">${t.tanggal}</td>
+             <td class="px-6 py-4 font-medium text-blue-600">${t.id_santri}</td>
+             <td class="px-6 py-4 font-medium text-emerald-600">${t.id_pedagang}</td>
+             <td class="px-6 py-4 text-right font-mono font-bold text-gray-800">Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td>
+           </tr>
+         `).join('') || '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Belum ada log transaksi masuk.</td></tr>';
+      }
+    }
+
+    async function renderApprovePencairan() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="mb-8 border-b-2 border-red-500 inline-block pb-1">
+           <h2 class="text-3xl font-extrabold text-gray-800">Approval Pencairan Dana</h2>
+           <p class="text-gray-500 mt-1">Layanan pencairan uang riil ke pedagang dari saldo digital.</p>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+           <div class="overflow-x-auto">
+             <table class="w-full text-left whitespace-nowrap">
+               <thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-xs font-bold tracking-wider">
+                 <tr>
+                   <th class="px-6 py-4">No. Pengajuan</th>
+                   <th class="px-6 py-4">Waktu Request</th>
+                   <th class="px-6 py-4">ID Pedagang Pemohon</th>
+                   <th class="px-6 py-4 text-right">Nominal Pencairan</th>
+                   <th class="px-6 py-4 text-center">Status System</th>
+                   <th class="px-6 py-4 text-center">Tindakan</th>
+                 </tr>
+               </thead>
+               <tbody id="tb-wd" class="divide-y divide-gray-100">
+                 <tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Mengambil antrean pencairan...</td></tr>
+               </tbody>
+             </table>
+           </div>
+        </div>
+      `;
+      
+      const data = await fetchAPI('get_data', {table: 'Pencairan'});
+      if (data) {
+        // Tampilkan yang Pending di atas, lalu Selesai di bawah
+        data.sort((a, b) => (a.status === 'Pending' ? -1 : 1));
+        
+        document.getElementById('tb-wd').innerHTML = data.map(w => `
+          <tr class="hover:bg-gray-50 transition-colors ${w.status === 'Pending' ? 'bg-orange-50/30' : ''}">
+            <td class="px-6 py-4 font-mono text-sm text-gray-600">${w.id_pencairan}</td>
+            <td class="px-6 py-4 text-sm">${w.tanggal}</td>
+            <td class="px-6 py-4 font-bold text-gray-800">${w.id_pedagang}</td>
+            <td class="px-6 py-4 text-right font-mono font-bold text-gray-800 text-lg">Rp ${parseInt(w.nominal||0).toLocaleString('id-ID')}</td>
+            <td class="px-6 py-4 text-center">
+               <span class="px-3 py-1 text-xs font-bold rounded-full ${w.status === 'Pending' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}">
+                 ${w.status.toUpperCase()}
+               </span>
+            </td>
+            <td class="px-6 py-4 text-center">
+              ${w.status === 'Pending' 
+                ? `<button onclick="approveWd('${w.id_pencairan}')" class="bg-gray-800 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md transition-all active:scale-95 flex items-center gap-2 mx-auto"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Serahkan Uang</button>` 
+                : `<span class="text-gray-400 text-sm">✅ Selesai</span>`}
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="6" class="px-6 py-10 text-center text-gray-400 text-lg border-2 border-dashed border-gray-100 rounded-xl m-4">Tidak ada antrean pencairan pedagang hari ini.</td></tr>';
+      }
+    }
+
+    function approveWd(id) {
+      confirmAction(`Apakah Anda sudah memastikan uang tunai diserahkan ke pedagang untuk kode <b>${id}</b>?`, async () => {
+        const res = await fetchAPI('approve_pencairan', {id_pencairan: id});
+        if(res) { 
+          showToast('Status pencairan berhasil ditandai selesai.'); 
+          renderApprovePencairan(); 
+        }
+      });
+    }
+
+    async function renderTopup() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="max-w-2xl mx-auto">
+          <div class="text-center mb-8">
+            <h2 class="text-4xl font-extrabold text-gray-800 tracking-tight">Portal Mesin EDC</h2>
+            <p class="text-gray-500 mt-2">Layanan Pengisian Saldo Voucher Digital Santri (Banin/Banat)</p>
+          </div>
+          
+          <div class="bg-white p-8 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+            <div class="bg-blue-50 text-blue-800 p-4 rounded-xl mb-8 flex gap-3 text-sm">
+               <span class="text-2xl">💡</span>
+               <p>Gunakan mesin Scanner Barcode atau ketik manual ID Santri untuk memverifikasi akun sebelum topup saldo.</p>
+            </div>
+            
+            <div class="mb-6">
+              <label class="block text-gray-700 font-bold mb-2">Pindai / Masukkan ID Santri</label>
+              <div class="flex gap-2">
+                <input type="text" id="t-id" class="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-blue-500 focus:bg-white p-4 rounded-xl outline-none transition-all text-lg font-mono uppercase" placeholder="Contoh: SNT-001">
+                <button onclick="cekSantri()" class="bg-gray-800 hover:bg-black text-white px-6 rounded-xl font-bold transition-colors">Cari Akun</button>
+              </div>
+              <div id="t-info-box" class="mt-3 p-4 rounded-xl bg-gray-50 border border-gray-100 hidden">
+                 <p class="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">Hasil Pencarian</p>
+                 <p id="t-nama" class="text-xl font-bold text-gray-800"></p>
+              </div>
+            </div>
+            
+            <div class="mb-6">
+              <label class="block text-gray-700 font-bold mb-2">Nominal Topup (Rupiah)</label>
+              <div class="relative">
+                <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold text-lg">Rp</span>
+                <input type="number" id="t-nom" class="w-full bg-gray-50 border-2 border-gray-200 focus:border-green-500 focus:bg-white p-4 pl-12 rounded-xl outline-none transition-all text-xl font-bold text-green-700" placeholder="0">
+              </div>
+            </div>
+            
+            <div class="mb-8">
+              <label class="block text-gray-700 font-bold mb-2">Nomor Referensi Struk Pembayaran (BRI/BSI/Cash)</label>
+              <input type="text" id="t-struk" class="w-full bg-gray-50 border-2 border-gray-200 focus:border-blue-500 focus:bg-white p-4 rounded-xl outline-none transition-all font-mono" placeholder="Ketik nomor referensi transaksi di sini">
+            </div>
+            
+            <button onclick="submitTopup()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold py-5 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 text-lg">
+               Suntikkan Saldo Sekarang
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function cekSantri() {
+      const id = document.getElementById('t-id').value.trim().toUpperCase();
+      document.getElementById('t-id').value = id; // auto uppercase
+      if(!id) return;
+      
+      const infoBox = document.getElementById('t-info-box');
+      const namaEl = document.getElementById('t-nama');
+      
+      infoBox.classList.remove('hidden');
+      namaEl.innerHTML = '<span class="animate-pulse">Mencari data di server...</span>';
+      
+      const data = await fetchAPI('get_data', {table: 'Santri'});
+      if(data) {
+        const santri = data.find(s => s.id_santri === id);
+        if(santri) {
+           infoBox.classList.remove('bg-red-50', 'border-red-100');
+           infoBox.classList.add('bg-green-50', 'border-green-200');
+           namaEl.innerHTML = `✅ ${santri.nama} <br><span class="text-sm font-normal text-green-700">Saldo saat ini: Rp ${parseInt(santri.saldo||0).toLocaleString('id-ID')}</span>`;
+        } else {
+           infoBox.classList.remove('bg-green-50', 'border-green-200');
+           infoBox.classList.add('bg-red-50', 'border-red-100');
+           namaEl.innerHTML = '❌ <span class="text-red-600">ID Santri tidak ditemukan!</span>';
+        }
+      }
+    }
+
+    async function submitTopup() {
+      const data = {
+        id_santri: document.getElementById('t-id').value.trim().toUpperCase(),
+        nominal: document.getElementById('t-nom').value,
+        struk: document.getElementById('t-struk').value.trim(),
+        petugas: AppState.user.username
+      };
+      
+      if(!data.id_santri || !data.nominal) return showToast('Nominal dan ID Santri wajib diisi dengan benar', 'error');
+      
+      confirmAction(`Konfirmasi eksekusi topup:<br><br>Santri: <b>${data.id_santri}</b><br>Nominal: <b>Rp ${parseInt(data.nominal).toLocaleString('id-ID')}</b><br>Referensi: <b>${data.struk || '-'}</b>`, async () => {
+        const res = await fetchAPI('topup', data);
+        if(res) {
+          showToast('Isi saldo sukses! Mesin EDC siap untuk transaksi selanjutnya.');
+          // Tampilkan notif sukses besar
+          document.getElementById('main-content').innerHTML = `
+            <div class="flex flex-col items-center justify-center h-full text-center">
+               <div class="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-5xl mb-6 shadow-inner">💳</div>
+               <h2 class="text-3xl font-extrabold text-gray-800 mb-2">Topup Berhasil!</h2>
+               <p class="text-gray-500 mb-8 text-lg">Saldo baru santri adalah Rp ${parseInt(res.saldo_baru).toLocaleString('id-ID')}</p>
+               <button onclick="renderTopup()" class="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold shadow hover:bg-black transition-colors">Kembali ke Mesin EDC</button>
+            </div>
+          `;
+        }
+      });
+    }
+
+    async function renderDashboardPedagang() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="max-w-4xl mx-auto">
+          <h2 class="text-3xl font-extrabold text-gray-800 mb-6 tracking-tight">Kios Area Bazar</h2>
+          
+          <div class="bg-amber-50 p-5 border-l-4 border-amber-500 text-amber-800 mb-8 rounded-r-lg shadow-sm">
+             <div class="flex gap-3 items-start">
+               <span class="text-2xl mt-0.5">📢</span>
+               <div>
+                 <h4 class="font-bold text-lg mb-1">Jadwal Penjualan Bazar Anda</h4>
+                 <p class="text-sm leading-relaxed">Bazar rutin dilaksanakan serentak setiap <b>Hari Jum'at (Kunjungan Wali Santri)</b> atau saat terdapat <b>Event Besar Pondok</b>. Harap maklum, Bazar diliburkan total saat Masa Liburan Semester dan Libur Hari Raya Idul Fitri.</p>
+               </div>
+             </div>
+          </div>
+          
+          <div class="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 rounded-3xl shadow-xl text-center text-white relative overflow-hidden">
+             <!-- Hiasan background kotak -->
+             <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full transform rotate-45"></div>
+             
+             <p class="text-emerald-100 font-medium tracking-widest uppercase text-sm mb-2 relative z-10">Total Omset Digital Tersedia</p>
+             <h1 class="text-6xl font-extrabold mb-6 relative z-10" id="d-saldo">...</h1>
+             
+             <div class="flex justify-center gap-4 relative z-10">
+                <button onclick="RoleMenus.pedagang[0].action()" class="bg-white text-emerald-700 hover:bg-gray-50 px-6 py-3 rounded-xl font-bold shadow-lg transition-transform active:scale-95 flex items-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> Buka Kasir
+                </button>
+                <button onclick="RoleMenus.pedagang[1].action()" class="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-transform active:scale-95">
+                  Tarik Dana Tunai
+                </button>
+             </div>
+          </div>
+        </div>
+      `;
+      
+      const pData = await fetchAPI('get_data', {table: 'Pedagang'});
+      if(pData) {
+        const me = pData.find(p => p.id_pedagang === AppState.user.id_ref);
+        if(me) {
+           document.getElementById('d-saldo').innerHTML = `<span class="text-3xl font-medium align-top">Rp</span> ${parseInt(me.saldo||0).toLocaleString('id-ID')}`;
+           AppState.mySaldo = parseInt(me.saldo||0); // Update cache
+        }
+      }
+    }
+
+    async function renderInputJajan() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="max-w-md mx-auto mt-4">
+          <div class="text-center mb-6">
+             <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3 shadow-sm">🛒</div>
+             <h2 class="text-2xl font-extrabold text-gray-800">Kasir Pintar</h2>
+             <p class="text-sm text-gray-500 mt-1">Potong saldo voucher santri (Non-Tunai)</p>
+          </div>
+          
+          <div class="bg-white p-6 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.05)] border border-gray-100">
+            <div class="mb-5">
+              <label class="block text-gray-700 font-bold mb-2 text-sm">QR Code / ID Pembeli</label>
+              <input type="text" id="j-id" class="w-full bg-gray-50 border-2 border-gray-200 focus:border-blue-500 p-4 rounded-xl outline-none font-mono uppercase text-lg" placeholder="Arahkan Scanner Disini" autofocus>
+            </div>
+            <div class="mb-8">
+              <label class="block text-gray-700 font-bold mb-2 text-sm">Total Belanjaan</label>
+              <div class="relative">
+                <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold">Rp</span>
+                <input type="number" id="j-nom" class="w-full bg-gray-50 border-2 border-gray-200 focus:border-blue-500 p-4 pl-12 rounded-xl outline-none text-2xl font-bold text-gray-800" placeholder="0">
+              </div>
+            </div>
+            
+            <button onclick="submitJajan()" class="w-full bg-gray-900 hover:bg-black text-white font-extrabold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-lg">
+               P O T O N G &nbsp; S A L D O
+            </button>
+          </div>
+          
+          <!-- Tombol kembali ke Dashboard Utama -->
+          <button onclick="renderDashboardPedagang()" class="w-full mt-4 text-center text-gray-500 text-sm hover:text-gray-800 font-medium py-2">
+            &larr; Kembali ke Home Stan Anda
+          </button>
+        </div>
+      `;
+    }
+
+    async function submitJajan() {
+      const idInput = document.getElementById('j-id');
+      const nomInput = document.getElementById('j-nom');
+      
+      const data = {
+        id_santri: idInput.value.trim().toUpperCase(),
+        nominal: nomInput.value,
+        id_pedagang: AppState.user.id_ref
+      };
+      
+      if(!data.id_santri || !data.nominal || data.nominal <= 0) return showToast('Harap isi ID pembeli dan pastikan nominal valid (diatas 0)', 'error');
+      
+      const res = await fetchAPI('jajan', data);
+      if(res) {
+        showToast('Transaksi Berhasil! Saldo pedagang bertambah.');
+        
+        // Tampilkan success check kecil
+        openModal('Nota Transaksi', `
+          <div class="text-center p-4">
+             <div class="text-6xl mb-4">✅</div>
+             <h3 class="text-2xl font-bold text-green-600 mb-2">LUNAS</h3>
+             <p class="text-gray-600 mb-6">Pembayaran voucher dari <b>${data.id_santri}</b> sebesar <b>Rp ${parseInt(data.nominal).toLocaleString('id-ID')}</b> telah masuk ke sistem.</p>
+             <div class="bg-gray-100 p-3 rounded-lg border border-gray-200">
+               <p class="text-xs text-gray-500 uppercase">Sisa Saldo Pembeli</p>
+               <p class="text-xl font-mono font-bold text-gray-800">Rp ${parseInt(res.sisa_saldo).toLocaleString('id-ID')}</p>
+             </div>
+             <button onclick="closeModal(); document.getElementById('j-id').focus();" class="mt-6 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl transition-colors">Tutup Jendela & Lanjut Transaksi</button>
+          </div>
+        `);
+        
+        idInput.value = '';
+        nomInput.value = '';
+      }
+    }
+
+    async function renderAjukanWD() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="max-w-4xl mx-auto mt-2">
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            
+            <!-- Form Ajukan WD -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+               <div class="flex items-center gap-3 mb-6">
+                 <div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-xl">💸</div>
+                 <h2 class="text-xl font-bold text-gray-800">Form Tarik Dana Tunai</h2>
+               </div>
+               
+               <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6 text-center">
+                 <p class="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Tersedia Untuk Ditarik</p>
+                 <p class="text-3xl font-extrabold text-emerald-600" id="wd-saldo">Rp ${AppState.mySaldo.toLocaleString('id-ID')}</p>
+               </div>
+               
+               <div class="mb-6">
+                 <label class="block text-gray-700 font-bold mb-2 text-sm">Nominal Pencairan</label>
+                 <div class="relative">
+                   <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold">Rp</span>
+                   <input type="number" id="w-nom" class="w-full bg-white border-2 border-gray-200 focus:border-orange-500 p-4 pl-12 rounded-xl outline-none font-bold text-gray-800" placeholder="0" max="${AppState.mySaldo}">
+                 </div>
+                 <button onclick="document.getElementById('w-nom').value = AppState.mySaldo" class="mt-2 text-xs text-blue-600 font-medium hover:underline">Tarik Semua Saldo</button>
+               </div>
+               
+               <button onclick="submitWD()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg transition-colors text-lg active:scale-95">
+                  Kirim Pengajuan ke Bendahara
+               </button>
+            </div>
+            
+            <!-- History WD -->
+            <div>
+              <h3 class="text-lg font-bold text-gray-800 mb-4 border-l-4 border-orange-500 pl-3">Riwayat Pengajuan Terakhir</h3>
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                 <div class="overflow-x-auto">
+                   <table class="w-full text-left whitespace-nowrap text-sm">
+                     <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase font-bold tracking-wider text-xs">
+                       <tr>
+                         <th class="px-4 py-3">Waktu</th>
+                         <th class="px-4 py-3">Nominal (Rp)</th>
+                         <th class="px-4 py-3 text-center">Status</th>
+                       </tr>
+                     </thead>
+                     <tbody id="tb-mywd" class="divide-y divide-gray-100">
+                       <tr><td colspan="3" class="px-4 py-6 text-center text-gray-400 italic">Mencari riwayat...</td></tr>
+                     </tbody>
+                   </table>
+                 </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      `;
+      
+      // Ambil saldo fresh dan riwayat WD
+      const [pData, wData] = await Promise.all([
+        fetchAPI('get_data', {table: 'Pedagang'}),
+        fetchAPI('get_data', {table: 'Pencairan'})
+      ]);
+      
+      if(pData) {
+        const me = pData.find(p => p.id_pedagang === AppState.user.id_ref);
+        if(me) {
+          AppState.mySaldo = parseInt(me.saldo||0);
+          document.getElementById('wd-saldo').innerText = `Rp ${AppState.mySaldo.toLocaleString('id-ID')}`;
+        }
+      }
+      
+      if(wData) {
+        // Filter khusus ID pedagang yang login
+        const myWds = wData.filter(w => w.id_pedagang === AppState.user.id_ref).reverse();
+        document.getElementById('tb-mywd').innerHTML = myWds.map(w => `
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-4 py-3 text-gray-600">${w.tanggal}</td>
+            <td class="px-4 py-3 font-mono font-bold text-gray-800">Rp ${parseInt(w.nominal||0).toLocaleString('id-ID')}</td>
+            <td class="px-4 py-3 text-center">
+               <span class="px-2 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${w.status === 'Pending' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}">
+                 ${w.status}
+               </span>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-400">Anda belum pernah mengajukan pencairan.</td></tr>';
+      }
+    }
+
+    async function submitWD() {
+      const nom = parseInt(document.getElementById('w-nom').value);
+      if(!nom || nom <= 0) return showToast('Nominal tidak valid atau kosong', 'error');
+      if(nom > AppState.mySaldo) return showToast('Gagal! Nominal melebihi saldo yang tersedia.', 'error');
+      
+      confirmAction(`Ajukan pencairan sebesar <b>Rp ${nom.toLocaleString('id-ID')}</b> kepada Bendahara?`, async () => {
+        const res = await fetchAPI('ajukan_pencairan', { id_pedagang: AppState.user.id_ref, nominal: nom });
+        if(res) {
+          showToast('Pengajuan berhasil! Silakan temui Bendahara untuk serah terima tunai.');
+          renderAjukanWD(); // Refresh UI
+        }
+      });
+    }
+
+  </script>
+</body>
+</html>
