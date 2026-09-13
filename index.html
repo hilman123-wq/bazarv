@@ -258,10 +258,12 @@
         { id: 'jadwal_pedagang', icon: '📅', label: 'Jadwal Rolling', action: renderJadwalPedagang },
         { id: 'master_santri', icon: '👨‍🎓', label: 'Master Santri', action: renderMasterSantri },
         { id: 'master_pedagang', icon: '🏪', label: 'Master Pedagang', action: renderMasterPedagang },
+        { id: 'absensi_pedagang', icon: '📷', label: 'Absensi Pedagang', action: renderAbsensi },
         { id: 'laporan_admin', icon: '📊', label: 'Laporan Global', action: renderLaporanGlobal }
       ],
       bendahara: [
         { id: 'pencairan_dana', icon: '💸', label: 'Pencairan Dana', action: renderApprovePencairan },
+        { id: 'setoran_dana', icon: '📥', label: 'Setoran Pedagang', action: renderSetoran },
         { id: 'laporan_bendahara', icon: '📉', label: 'Laporan Keuangan', action: renderLaporanGlobal }
       ],
       pedagang: [
@@ -582,11 +584,199 @@
             <td class="px-6 py-4 text-gray-600">${p.jualan}</td>
             <td class="px-6 py-4 text-right font-mono font-bold text-emerald-600">Rp ${parseInt(p.saldo||0).toLocaleString('id-ID')}</td>
             <td class="px-6 py-4 text-center space-x-2">
+              <button onclick="showQRPedagang('${p.id_pedagang}', '${p.nama}')" class="text-gray-500 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors">🖨️ QR Nametag</button>
               <button onclick='openModalPedagang(${JSON.stringify(p)})' class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-sm font-medium transition-colors">Edit</button>
               <button onclick="deletePedagang('${p.id_pedagang}')" class="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-sm font-medium transition-colors">Cabut Izin</button>
             </td>
           </tr>
         `).join('') || '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Belum ada mitra pedagang.</td></tr>';
+      }
+    }
+
+    function showQRPedagang(id_pedagang, nama) {
+      const html = `
+        <div class="flex flex-col items-center py-4 print:py-0">
+           <!-- Desain Nametag QR Pedagang -->
+           <div class="bg-white border-2 border-emerald-600 rounded-2xl p-6 shadow-md w-full max-w-sm text-center relative overflow-hidden">
+              <div class="absolute top-0 left-0 w-full h-4 bg-emerald-600"></div>
+              
+              <h3 class="text-xl font-extrabold text-emerald-800 uppercase tracking-widest mt-2">Nametag Pedagang</h3>
+              <p class="text-xs text-gray-500 font-semibold mb-4 border-b pb-2">Bazar Al-Islam</p>
+              
+              <h4 class="text-2xl font-bold text-gray-800 leading-tight">${nama}</h4>
+              <p class="text-gray-500 mb-4 tracking-widest text-sm font-mono mt-1">ID: ${id_pedagang}</p>
+              
+              <div class="bg-gray-50 p-3 rounded-xl inline-block mb-4 border border-gray-200">
+                <div id="qr-pedagang-container" class="w-[180px] h-[180px] flex justify-center items-center"></div>
+              </div>
+              
+              <p class="text-[10px] text-gray-500 mt-2 font-medium italic">
+                 *Tunjukkan QR code ini ke Admin di meja panitia untuk mencatat kehadiran.
+              </p>
+           </div>
+           
+           <button onclick="window.print()" class="mt-6 w-full max-w-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors print:hidden">
+             🖨️ Cetak Nametag
+           </button>
+        </div>
+      `;
+      openModal('Cetak Nametag QR', html);
+      
+      setTimeout(() => {
+        document.getElementById("qr-pedagang-container").innerHTML = "";
+        new QRCode(document.getElementById("qr-pedagang-container"), {
+          text: id_pedagang,
+          width: 180,
+          height: 180,
+          colorDark : "#064e3b", // emerald-900
+          colorLight : "#f9fafb",
+          correctLevel : QRCode.CorrectLevel.H
+        });
+      }, 200);
+    }
+
+    async function renderAbsensi() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="flex flex-col md:flex-row gap-6 mt-2">
+          
+          <!-- Kamera Pemindai Absensi -->
+          <div class="w-full md:w-1/3 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div class="text-center mb-6">
+              <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3 shadow-sm">📷</div>
+              <h2 class="text-xl font-bold text-gray-800">Scan Kehadiran</h2>
+              <p class="text-xs text-gray-500 mt-1">Scan nametag QR pedagang bazar</p>
+            </div>
+            
+            <button type="button" id="btn-kamera-absen" onclick="toggleKameraAbsen()" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold py-3 rounded-xl border border-emerald-200 transition-colors flex justify-center items-center gap-2 mb-4">
+              📷 Buka Kamera Scanner
+            </button>
+            <div id="reader-absen-container" class="hidden mb-4 rounded-xl overflow-hidden border-2 border-emerald-500 relative">
+              <div id="reader-absen" class="w-full bg-black"></div>
+            </div>
+
+            <div>
+              <label class="block text-gray-700 font-bold mb-2 text-sm">Cek Manual (Bila Kamera Sulit)</label>
+              <div class="flex gap-2">
+                <input type="text" id="a-id" class="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-emerald-500 p-3 rounded-xl outline-none uppercase" placeholder="Ketik ID Pedagang">
+                <button onclick="submitAbsensi()" class="bg-gray-800 hover:bg-black text-white px-5 rounded-xl font-bold transition-colors">Hadir</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Papan Dasbor Kehadiran -->
+          <div class="w-full md:w-2/3 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+             <div class="flex justify-between items-center mb-6 border-b border-gray-100 pb-3">
+               <h2 class="text-xl font-bold text-gray-800">Daftar Kehadiran Hari Ini</h2>
+               <span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">${new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+             </div>
+             
+             <div class="overflow-x-auto">
+               <table class="w-full text-left whitespace-nowrap">
+                 <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase text-xs font-bold">
+                   <tr>
+                     <th class="px-4 py-3">Waktu Tiba</th>
+                     <th class="px-4 py-3">ID Pedagang</th>
+                     <th class="px-4 py-3">Nama Lengkap</th>
+                     <th class="px-4 py-3 text-center">Status</th>
+                   </tr>
+                 </thead>
+                 <tbody id="tb-absensi" class="divide-y divide-gray-100">
+                   <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Memuat data absensi...</td></tr>
+                 </tbody>
+               </table>
+             </div>
+          </div>
+        </div>
+      `;
+      
+      refreshTabelAbsensi();
+    }
+
+    async function refreshTabelAbsensi() {
+      const data = await getTableData('Kehadiran', true); // Memaksa refresh bypass cache
+      
+      // Amankan pembacaan tanggal hari ini dengan format (DD/MM/YYYY)
+      const d = new Date();
+      const todayStr = String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+      
+      if (data && data.length > 0) {
+        // Ambil hanya absen hari ini, dan dibalik (reverse) agar absen terbaru di paling atas
+        const todayAbsen = data.filter(a => a.waktu && a.waktu.toString().includes(todayStr)).reverse();
+        
+        document.getElementById('tb-absensi').innerHTML = todayAbsen.map(a => `
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-3 text-sm text-gray-500 font-mono">${a.waktu.split(',')[1] || a.waktu}</td>
+            <td class="px-4 py-3 font-medium text-gray-900">${a.id_pedagang}</td>
+            <td class="px-4 py-3 font-semibold text-emerald-700">${a.nama_pedagang}</td>
+            <td class="px-4 py-3 text-center">
+              <span class="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full">Hadir</span>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Belum ada pedagang yang hadir.</td></tr>';
+      } else {
+        document.getElementById('tb-absensi').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Belum ada data absensi.</td></tr>';
+      }
+    }
+
+    async function submitAbsensi(scannedId = null) {
+      const idInput = scannedId || document.getElementById('a-id').value.trim().toUpperCase();
+      if(!idInput) return showToast('Harap isi / scan ID Pedagang!', 'error');
+      
+      const res = await fetchAPI('catat_kehadiran', { id_pedagang: idInput });
+      if(res) {
+        showToast(`Berhasil! ${res.nama} tercatat hadir.`);
+        if(!scannedId) document.getElementById('a-id').value = '';
+        refreshTabelAbsensi();
+      }
+    }
+
+    // Variabel Scanner khusus Absensi
+    let html5QrCodeAbsen = null;
+
+    function toggleKameraAbsen() {
+      const container = document.getElementById('reader-absen-container');
+      const btnKamera = document.getElementById('btn-kamera-absen');
+
+      if (html5QrCodeAbsen && html5QrCodeAbsen.isScanning) {
+        stopKameraAbsen();
+        return;
+      }
+
+      container.classList.remove('hidden');
+      btnKamera.innerHTML = '❌ Tutup Kamera Scanner';
+      btnKamera.classList.replace('bg-emerald-50', 'bg-red-50');
+      btnKamera.classList.replace('text-emerald-700', 'text-red-600');
+      btnKamera.classList.replace('border-emerald-200', 'border-red-200');
+
+      html5QrCodeAbsen = new Html5Qrcode("reader-absen");
+      html5QrCodeAbsen.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          try { navigator.vibrate(200); } catch(e){}
+          stopKameraAbsen();
+          document.getElementById('a-id').value = decodedText;
+          submitAbsensi(decodedText); // Eksekusi absensi secara otomatis
+        },
+        (errorMessage) => { }
+      ).catch(() => {
+        showToast('Gagal mengakses kamera.', 'error');
+        stopKameraAbsen();
+      });
+    }
+
+    function stopKameraAbsen() {
+      if (html5QrCodeAbsen && html5QrCodeAbsen.isScanning) {
+        html5QrCodeAbsen.stop().then(() => { html5QrCodeAbsen.clear(); }).catch(e => console.log(e));
+      }
+      const container = document.getElementById('reader-absen-container');
+      const btnKamera = document.getElementById('btn-kamera-absen');
+      if(container && btnKamera) {
+        container.classList.add('hidden');
+        btnKamera.innerHTML = '📷 Buka Kamera Scanner';
+        btnKamera.classList.replace('bg-red-50', 'bg-emerald-50');
+        btnKamera.classList.replace('text-red-600', 'text-emerald-700');
+        btnKamera.classList.replace('border-red-200', 'border-emerald-200');
       }
     }
 
@@ -735,75 +925,211 @@
       });
     }
 
+    async function renderSetoran() {
+      document.getElementById('main-content').innerHTML = `
+        <div class="max-w-2xl mx-auto mt-4">
+          <div class="mb-8 border-b-2 border-emerald-500 inline-block pb-1">
+             <h2 class="text-3xl font-extrabold text-gray-800">Setoran Pedagang</h2>
+             <p class="text-gray-500 mt-1">Layanan pencatatan Shodaqoh dan Sewa Tenda.</p>
+          </div>
+          
+          <div class="bg-white p-6 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.05)] border border-gray-100">
+            <div class="mb-5">
+              <label class="block text-gray-700 font-bold mb-2 text-sm">Cari Pedagang (ID / Nama)</label>
+              <div class="flex gap-2">
+                <input type="text" id="s-id" class="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-emerald-500 p-4 rounded-xl outline-none text-lg uppercase" placeholder="Ketik P001 atau Nama" autofocus>
+                <button type="button" onclick="cekPedagangSetoran()" class="bg-gray-800 hover:bg-black text-white px-5 rounded-xl font-bold transition-colors shadow-md">Cari</button>
+              </div>
+              <div id="s-info-box" class="mt-3 p-3 rounded-xl bg-gray-50 border border-gray-100 hidden"></div>
+            </div>
+            
+            <div class="mb-5">
+              <label class="block text-gray-700 font-bold mb-2 text-sm">Jenis Setoran</label>
+              <select id="s-jenis" class="w-full bg-gray-50 border-2 border-gray-200 focus:border-emerald-500 p-4 rounded-xl outline-none font-bold text-gray-700 appearance-none">
+                 <option value="Shodaqoh">🤲 Shodaqoh / Infaq</option>
+                 <option value="Sewa Tenda">⛺ Sewa Tenda / Lapak</option>
+              </select>
+            </div>
+            
+            <div class="mb-8">
+              <label class="block text-gray-700 font-bold mb-2 text-sm">Nominal Setoran Tunai</label>
+              <div class="relative">
+                <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold">Rp</span>
+                <input type="number" id="s-nom" class="w-full bg-gray-50 border-2 border-gray-200 focus:border-emerald-500 p-4 pl-12 rounded-xl outline-none text-2xl font-bold text-emerald-700" placeholder="0">
+              </div>
+            </div>
+            
+            <button onclick="submitSetoran()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-lg">
+               S I M P A N &nbsp; S E T O R A N
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function cekPedagangSetoran() {
+      const query = document.getElementById('s-id').value.trim();
+      if(!query) return;
+      
+      const infoBox = document.getElementById('s-info-box');
+      infoBox.classList.remove('hidden');
+      infoBox.innerHTML = '<span class="animate-pulse text-gray-500 text-sm font-medium">Mencari data pedagang...</span>';
+      
+      const data = await getTableData('Pedagang');
+      if(data) {
+        const pedagang = data.find(p => p.id_pedagang.toUpperCase() === query.toUpperCase() || p.nama.toLowerCase().includes(query.toLowerCase()));
+        if(pedagang) {
+           document.getElementById('s-id').value = pedagang.id_pedagang;
+           document.getElementById('s-id').dataset.nama = pedagang.nama; // Simpan nama asli
+           
+           infoBox.classList.remove('bg-red-50', 'border-red-100');
+           infoBox.classList.add('bg-emerald-50', 'border-emerald-200');
+           infoBox.innerHTML = `<span class="font-bold text-emerald-800 text-lg">✅ ${pedagang.nama}</span> <br><span class="text-sm font-medium text-emerald-700">ID: ${pedagang.id_pedagang}</span>`;
+           document.getElementById('s-nom').focus();
+        } else {
+           infoBox.classList.remove('bg-emerald-50', 'border-emerald-200');
+           infoBox.classList.add('bg-red-50', 'border-red-100');
+           infoBox.innerHTML = '❌ <span class="text-red-600 text-sm font-bold">Data Pedagang tidak ditemukan!</span>';
+        }
+      }
+    }
+
+    async function submitSetoran() {
+      const idInput = document.getElementById('s-id');
+      const nama = idInput.dataset.nama;
+      const jenis = document.getElementById('s-jenis').value;
+      const nom = document.getElementById('s-nom').value;
+      
+      if(!idInput.value || !nama) return showToast('Harap cari dan pilih pedagang terlebih dahulu', 'error');
+      if(!nom || nom <= 0) return showToast('Nominal setoran tidak valid', 'error');
+      
+      const data = {
+        id_pedagang: idInput.value,
+        nama_pedagang: nama,
+        jenis: jenis,
+        nominal: nom
+      };
+      
+      const res = await fetchAPI('catat_setoran', data);
+      if(res) {
+        clearCache('Setoran'); // Bersihkan cache tabel setoran
+        showToast('Setoran berhasil dicatat!');
+        renderSetoran(); // Reset form
+      }
+    }
+
     async function renderLaporanGlobal() {
       document.getElementById('main-content').innerHTML = `
         <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-2">Laporan & Statistik</h2>
-        <p class="text-gray-500 mb-8">Pemantauan perputaran uang voucher elektronik.</p>
+        <p class="text-gray-500 mb-8">Pemantauan perputaran uang dan setoran tunai.</p>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-           <div class="bg-gradient-to-br from-blue-500 to-blue-700 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
-             <svg class="absolute -right-4 -bottom-4 w-32 h-32 text-blue-400 opacity-30" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
-             <p class="text-blue-100 font-medium mb-1">Total Uang Beredar (Saldo Santri Aktif)</p>
-             <div id="card-beredar" class="text-4xl font-extrabold flex items-baseline">
-                <span class="text-2xl mr-2">Rp</span> <span class="animate-pulse bg-blue-400/50 h-10 w-32 rounded"></span>
-             </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+           <div class="bg-gradient-to-br from-blue-500 to-blue-700 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
+             <p class="text-blue-100 text-xs uppercase font-bold tracking-wider mb-1">Total Uang Beredar</p>
+             <div id="card-beredar" class="text-3xl font-extrabold mt-2"><span class="animate-pulse bg-blue-400/50 h-8 w-24 rounded inline-block"></span></div>
            </div>
            
-           <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
-             <svg class="absolute -right-4 -bottom-4 w-32 h-32 text-emerald-400 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-             <p class="text-emerald-100 font-medium mb-1">Volume Transaksi Jajan (All Time)</p>
-             <div id="card-trx" class="text-4xl font-extrabold flex items-baseline">
-                <span class="text-2xl mr-2">Rp</span> <span class="animate-pulse bg-emerald-400/50 h-10 w-32 rounded"></span>
-             </div>
+           <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
+             <p class="text-emerald-100 text-xs uppercase font-bold tracking-wider mb-1">Volume Jajan (All Time)</p>
+             <div id="card-trx" class="text-3xl font-extrabold mt-2"><span class="animate-pulse bg-emerald-400/50 h-8 w-24 rounded inline-block"></span></div>
+           </div>
+
+           <div class="bg-white border-2 border-indigo-100 p-5 rounded-2xl shadow-sm relative overflow-hidden">
+             <p class="text-indigo-500 text-xs uppercase font-bold tracking-wider mb-1">Total Shodaqoh</p>
+             <div id="card-shodaqoh" class="text-3xl font-extrabold text-indigo-700 mt-2"><span class="animate-pulse bg-indigo-100 h-8 w-24 rounded inline-block"></span></div>
+           </div>
+
+           <div class="bg-white border-2 border-purple-100 p-5 rounded-2xl shadow-sm relative overflow-hidden">
+             <p class="text-purple-500 text-xs uppercase font-bold tracking-wider mb-1">Total Sewa Tenda</p>
+             <div id="card-sewa" class="text-3xl font-extrabold text-purple-700 mt-2"><span class="animate-pulse bg-purple-100 h-8 w-24 rounded inline-block"></span></div>
            </div>
         </div>
         
-        <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3">Log Transaksi Terakhir</h3>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-           <div class="overflow-x-auto">
-             <table class="w-full text-left whitespace-nowrap">
-               <thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-xs font-bold tracking-wider">
-                 <tr>
-                   <th class="px-6 py-4">ID Transaksi</th>
-                   <th class="px-6 py-4">Waktu Eksekusi</th>
-                   <th class="px-6 py-4">Pembeli (ID Santri)</th>
-                   <th class="px-6 py-4">Merchant (ID Pedagang)</th>
-                   <th class="px-6 py-4 text-right">Nilai Transaksi</th>
-                 </tr>
-               </thead>
-               <tbody id="table-riwayat" class="divide-y divide-gray-100">
-                 <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Memuat log transaksi...</td></tr>
-               </tbody>
-             </table>
-           </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3">Riwayat Transaksi Jajan</h3>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+               <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+                 <table class="w-full text-left whitespace-nowrap">
+                   <thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-xs font-bold sticky top-0">
+                     <tr>
+                       <th class="px-4 py-3">Waktu</th>
+                       <th class="px-4 py-3">Pembeli & Merchant</th>
+                       <th class="px-4 py-3 text-right">Nilai</th>
+                     </tr>
+                   </thead>
+                   <tbody id="table-riwayat" class="divide-y divide-gray-100">
+                     <tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">Memuat log transaksi...</td></tr>
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-indigo-500 pl-3">Riwayat Setoran (Shodaqoh/Sewa)</h3>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+               <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+                 <table class="w-full text-left whitespace-nowrap">
+                   <thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-xs font-bold sticky top-0">
+                     <tr>
+                       <th class="px-4 py-3">Waktu</th>
+                       <th class="px-4 py-3">Pedagang & Jenis</th>
+                       <th class="px-4 py-3 text-right">Nominal</th>
+                     </tr>
+                   </thead>
+                   <tbody id="table-setoran" class="divide-y divide-gray-100">
+                     <tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">Memuat log setoran...</td></tr>
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+          </div>
         </div>
       `;
       
-      // Ambil data secara paralel dari cache untuk mempercepat loading SPA
-      const [santriData, trxData] = await Promise.all([
+      // Ambil data secara paralel dari cache agar super cepat
+      const [santriData, trxData, setoranData] = await Promise.all([
         getTableData('Santri'),
-        getTableData('Transaksi')
+        getTableData('Transaksi'),
+        getTableData('Setoran')
       ]);
       
       if (santriData && trxData) {
          const totalBeredar = santriData.reduce((sum, s) => sum + parseInt(s.saldo||0), 0);
          const totalTrx = trxData.reduce((sum, t) => sum + parseInt(t.nominal||0), 0);
          
-         document.getElementById('card-beredar').innerHTML = `<span class="text-2xl mr-2">Rp</span> ${totalBeredar.toLocaleString('id-ID')}`;
-         document.getElementById('card-trx').innerHTML = `<span class="text-2xl mr-2">Rp</span> ${totalTrx.toLocaleString('id-ID')}`;
+         document.getElementById('card-beredar').innerHTML = `<span class="text-lg mr-1 font-normal">Rp</span>${totalBeredar.toLocaleString('id-ID')}`;
+         document.getElementById('card-trx').innerHTML = `<span class="text-lg mr-1 font-normal">Rp</span>${totalTrx.toLocaleString('id-ID')}`;
          
-         // Ambil 15 transaksi terbaru
-         const recentTrx = trxData.reverse().slice(0, 15);
-         
+         const recentTrx = trxData.reverse().slice(0, 50); // Tampilkan max 50 riwayat terakhir
          document.getElementById('table-riwayat').innerHTML = recentTrx.map(t => `
            <tr class="hover:bg-gray-50">
-             <td class="px-6 py-4 text-xs font-mono text-gray-500">${t.id_trx}</td>
-             <td class="px-6 py-4 text-sm">${t.tanggal}</td>
-             <td class="px-6 py-4 font-medium text-blue-600">${t.id_santri}</td>
-             <td class="px-6 py-4 font-medium text-emerald-600">${t.id_pedagang}</td>
-             <td class="px-6 py-4 text-right font-mono font-bold text-gray-800">Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td>
+             <td class="px-4 py-3 text-xs text-gray-500">${t.tanggal}</td>
+             <td class="px-4 py-3 text-sm"><span class="font-medium text-blue-600">${t.id_santri}</span> ➔ <span class="text-emerald-600">${t.id_pedagang}</span></td>
+             <td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td>
            </tr>
-         `).join('') || '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Belum ada log transaksi masuk.</td></tr>';
+         `).join('') || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada log transaksi.</td></tr>';
+      }
+
+      if (setoranData) {
+         const totalShodaqoh = setoranData.filter(s => s.jenis === 'Shodaqoh').reduce((sum, s) => sum + parseInt(s.nominal||0), 0);
+         const totalSewa = setoranData.filter(s => s.jenis === 'Sewa Tenda').reduce((sum, s) => sum + parseInt(s.nominal||0), 0);
+
+         document.getElementById('card-shodaqoh').innerHTML = `<span class="text-lg mr-1 font-normal">Rp</span>${totalShodaqoh.toLocaleString('id-ID')}`;
+         document.getElementById('card-sewa').innerHTML = `<span class="text-lg mr-1 font-normal">Rp</span>${totalSewa.toLocaleString('id-ID')}`;
+
+         const recentSetoran = setoranData.reverse().slice(0, 50);
+         document.getElementById('table-setoran').innerHTML = recentSetoran.map(t => `
+           <tr class="hover:bg-gray-50">
+             <td class="px-4 py-3 text-xs text-gray-500">${t.tanggal}</td>
+             <td class="px-4 py-3 text-sm">
+               <div class="font-bold text-gray-800">${t.nama_pedagang}</div>
+               <div class="text-xs ${t.jenis === 'Shodaqoh' ? 'text-indigo-600' : 'text-purple-600'} font-semibold uppercase tracking-wider">${t.jenis}</div>
+             </td>
+             <td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td>
+           </tr>
+         `).join('') || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada log setoran.</td></tr>';
       }
     }
 
@@ -1214,7 +1540,8 @@
     // Modifikasi juga fungsi ganti menu agar jika pindah menu kamera mati
     const originalLoadMenu = loadMenu;
     loadMenu = function(index, btnEl) {
-       stopKamera(); // matikan kamera saat ganti menu
+       if(typeof stopKamera === 'function') stopKamera(); // matikan kamera jajan
+       if(typeof stopKameraAbsen === 'function') stopKameraAbsen(); // matikan kamera absensi
        originalLoadMenu(index, btnEl);
     }
 
