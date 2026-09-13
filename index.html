@@ -1089,11 +1089,19 @@
       `;
       
       // Ambil data secara paralel dari cache agar super cepat
-      const [santriData, trxData, setoranData] = await Promise.all([
+      const [santriData, pdgData, trxData, setoranData] = await Promise.all([
         getTableData('Santri'),
+        getTableData('Pedagang'),
         getTableData('Transaksi'),
         getTableData('Setoran')
       ]);
+
+      // Buat kamus (map) untuk menterjemahkan ID menjadi Nama dengan cepat
+      const mapSantri = {};
+      if (santriData) santriData.forEach(s => mapSantri[s.id_santri] = s.nama);
+      
+      const mapPdg = {};
+      if (pdgData) pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
       
       if (santriData && trxData) {
          const totalBeredar = santriData.reduce((sum, s) => sum + parseInt(s.saldo||0), 0);
@@ -1103,13 +1111,22 @@
          document.getElementById('card-trx').innerHTML = `<span class="text-lg mr-1 font-normal">Rp</span>${totalTrx.toLocaleString('id-ID')}`;
          
          const recentTrx = trxData.reverse().slice(0, 50); // Tampilkan max 50 riwayat terakhir
-         document.getElementById('table-riwayat').innerHTML = recentTrx.map(t => `
-           <tr class="hover:bg-gray-50">
-             <td class="px-4 py-3 text-xs text-gray-500">${t.tanggal}</td>
-             <td class="px-4 py-3 text-sm"><span class="font-medium text-blue-600">${t.id_santri}</span> ➔ <span class="text-emerald-600">${t.id_pedagang}</span></td>
-             <td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td>
-           </tr>
-         `).join('') || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada log transaksi.</td></tr>';
+         document.getElementById('table-riwayat').innerHTML = recentTrx.map(t => {
+           // Menterjemahkan ID ke Nama
+           const namaPembeli = mapSantri[t.id_santri] || t.id_santri;
+           const namaToko = mapPdg[t.id_pedagang] || t.id_pedagang;
+           
+           return `
+             <tr class="hover:bg-gray-50">
+               <td class="px-4 py-3 text-xs text-gray-500">${t.tanggal}</td>
+               <td class="px-4 py-3 text-sm">
+                 <div class="font-bold text-blue-700">${namaPembeli} <span class="text-[10px] font-normal text-gray-400">(${t.id_santri})</span></div>
+                 <div class="text-xs text-emerald-600 mt-0.5">➔ ${namaToko}</div>
+               </td>
+               <td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td>
+             </tr>
+           `;
+         }).join('') || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada log transaksi.</td></tr>';
       }
 
       if (setoranData) {
@@ -1147,7 +1164,7 @@
                  <tr>
                    <th class="px-6 py-4">No. Pengajuan</th>
                    <th class="px-6 py-4">Waktu Request</th>
-                   <th class="px-6 py-4">ID Pedagang Pemohon</th>
+                   <th class="px-6 py-4">Nama & ID Pedagang</th>
                    <th class="px-6 py-4 text-right">Nominal Pencairan</th>
                    <th class="px-6 py-4 text-center">Status System</th>
                    <th class="px-6 py-4 text-center">Tindakan</th>
@@ -1161,16 +1178,30 @@
         </div>
       `;
       
-      const data = await getTableData('Pencairan');
+      // Ambil data Pencairan dan data Pedagang untuk menterjemahkan ID
+      const [data, pdgData] = await Promise.all([
+         getTableData('Pencairan'),
+         getTableData('Pedagang')
+      ]);
+
+      const mapPdg = {};
+      if (pdgData) pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
+
       if (data) {
         // Tampilkan yang Pending di atas, lalu Selesai di bawah
         data.sort((a, b) => (a.status === 'Pending' ? -1 : 1));
         
-        document.getElementById('tb-wd').innerHTML = data.map(w => `
+        document.getElementById('tb-wd').innerHTML = data.map(w => {
+          const namaPedagang = mapPdg[w.id_pedagang] || 'Mitra Tidak Dikenali';
+          
+          return `
           <tr class="hover:bg-gray-50 transition-colors ${w.status === 'Pending' ? 'bg-orange-50/30' : ''}">
             <td class="px-6 py-4 font-mono text-sm text-gray-600">${w.id_pencairan}</td>
             <td class="px-6 py-4 text-sm">${w.tanggal}</td>
-            <td class="px-6 py-4 font-bold text-gray-800">${w.id_pedagang}</td>
+            <td class="px-6 py-4">
+               <div class="font-bold text-gray-800">${namaPedagang}</div>
+               <div class="text-xs text-gray-500 font-mono">${w.id_pedagang}</div>
+            </td>
             <td class="px-6 py-4 text-right font-mono font-bold text-gray-800 text-lg">Rp ${parseInt(w.nominal||0).toLocaleString('id-ID')}</td>
             <td class="px-6 py-4 text-center">
                <span class="px-3 py-1 text-xs font-bold rounded-full ${w.status === 'Pending' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}">
@@ -1183,7 +1214,8 @@
                 : `<span class="text-gray-400 text-sm">✅ Selesai</span>`}
             </td>
           </tr>
-        `).join('') || '<tr><td colspan="6" class="px-6 py-10 text-center text-gray-400 text-lg border-2 border-dashed border-gray-100 rounded-xl m-4">Tidak ada antrean pencairan pedagang hari ini.</td></tr>';
+          `;
+        }).join('') || '<tr><td colspan="6" class="px-6 py-10 text-center text-gray-400 text-lg border-2 border-dashed border-gray-100 rounded-xl m-4">Tidak ada antrean pencairan pedagang hari ini.</td></tr>';
       }
     }
 
