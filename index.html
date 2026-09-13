@@ -766,9 +766,9 @@
             </div>
             
             <div class="mb-6">
-              <label class="block text-gray-700 font-bold mb-2">Pindai / Masukkan ID Santri</label>
+              <label class="block text-gray-700 font-bold mb-2">Pindai QR / Ketik ID / Ketik Nama Santri</label>
               <div class="flex gap-2">
-                <input type="text" id="t-id" class="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-blue-500 focus:bg-white p-4 rounded-xl outline-none transition-all text-lg font-mono uppercase" placeholder="Contoh: SNT-001">
+                <input type="text" id="t-id" class="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-blue-500 focus:bg-white p-4 rounded-xl outline-none transition-all text-lg font-mono" placeholder="Contoh: SNT-001 atau Ahmad">
                 <button onclick="cekSantri()" class="bg-gray-800 hover:bg-black text-white px-6 rounded-xl font-bold transition-colors">Cari Akun</button>
               </div>
               <div id="t-info-box" class="mt-3 p-4 rounded-xl bg-gray-50 border border-gray-100 hidden">
@@ -799,9 +799,8 @@
     }
 
     async function cekSantri() {
-      const id = document.getElementById('t-id').value.trim().toUpperCase();
-      document.getElementById('t-id').value = id; // auto uppercase
-      if(!id) return;
+      const query = document.getElementById('t-id').value.trim();
+      if(!query) return;
       
       const infoBox = document.getElementById('t-info-box');
       const namaEl = document.getElementById('t-nama');
@@ -811,15 +810,33 @@
       
       const data = await fetchAPI('get_data', {table: 'Santri'});
       if(data) {
-        const santri = data.find(s => s.id_santri === id);
+        // Cari berdasarkan ID persis atau Nama (mengandung kata yang diketik)
+        const santri = data.find(s => 
+          s.id_santri.toUpperCase() === query.toUpperCase() || 
+          s.nama.toLowerCase().includes(query.toLowerCase())
+        );
+
         if(santri) {
+           // Timpa input dengan ID asli agar proses topup tidak error jika sebelumnya mengetik nama
+           document.getElementById('t-id').value = santri.id_santri;
+           
            infoBox.classList.remove('bg-red-50', 'border-red-100');
            infoBox.classList.add('bg-green-50', 'border-green-200');
-           namaEl.innerHTML = `✅ ${santri.nama} <br><span class="text-sm font-normal text-green-700">Saldo saat ini: Rp ${parseInt(santri.saldo||0).toLocaleString('id-ID')}</span>`;
+           namaEl.innerHTML = `
+             <div class="flex justify-between items-center">
+               <div>
+                 ✅ ${santri.nama} <br>
+                 <span class="text-sm font-normal text-green-700">Saldo saat ini: Rp ${parseInt(santri.saldo||0).toLocaleString('id-ID')}</span>
+               </div>
+               <button onclick="showQR('${santri.id_santri}', '${santri.nama}', ${santri.saldo})" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-colors border border-blue-300">
+                 🖨️ Cetak Voucher
+               </button>
+             </div>
+           `;
         } else {
            infoBox.classList.remove('bg-green-50', 'border-green-200');
            infoBox.classList.add('bg-red-50', 'border-red-100');
-           namaEl.innerHTML = '❌ <span class="text-red-600">ID Santri tidak ditemukan!</span>';
+           namaEl.innerHTML = '❌ <span class="text-red-600">ID / Nama Santri tidak ditemukan!</span>';
         }
       }
     }
