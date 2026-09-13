@@ -695,29 +695,32 @@
     async function refreshTabelAbsensi() {
       const data = await getTableData('Kehadiran', true); // Memaksa refresh bypass cache
       
-      // Amankan pembacaan tanggal hari ini dengan format (DD/MM/YYYY)
-      const d = new Date();
-      const todayStr = String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
-      
       if (data && data.length > 0) {
-        // Ambil hanya absen hari ini, dan dibalik (reverse) agar absen terbaru di paling atas
-        const todayAbsen = data.filter(a => a.waktu && a.waktu.toString().includes(todayStr)).reverse();
+        // Ambil 50 data absen terakhir (dibalik agar yang terbaru di atas)
+        // Kita tidak memfilter tanggal terlalu ketat agar data pasti muncul di layar
+        const recentAbsen = data.reverse().slice(0, 50);
         
-        document.getElementById('tb-absensi').innerHTML = todayAbsen.map(a => `
+        document.getElementById('tb-absensi').innerHTML = recentAbsen.map(a => {
+          // Deteksi pintar: bisa membaca kolom bernama 'waktu' ataupun 'tanggal'
+          let waktuAbsen = a.waktu || a.tanggal || '-';
+          let jamSaja = waktuAbsen.toString().includes(',') ? waktuAbsen.toString().split(',')[1].trim() : waktuAbsen;
+
+          return `
           <tr class="hover:bg-gray-50">
-            <td class="px-4 py-3 text-sm text-gray-500 font-mono">${a.waktu.split(',')[1] || a.waktu}</td>
-            <td class="px-4 py-3 font-medium text-gray-900">${a.id_pedagang}</td>
-            <td class="px-4 py-3 font-semibold text-emerald-700">${a.nama_pedagang}</td>
+            <td class="px-4 py-3 text-sm text-gray-500 font-mono">${jamSaja}</td>
+            <td class="px-4 py-3 font-medium text-gray-900">${a.id_pedagang || '-'}</td>
+            <td class="px-4 py-3 font-semibold text-emerald-700">${a.nama_pedagang || '-'}</td>
             <td class="px-4 py-3 text-center">
               <span class="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full">Hadir</span>
             </td>
           </tr>
-        `).join('') || '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Belum ada pedagang yang hadir.</td></tr>';
+          `;
+        }).join('');
       } else {
         document.getElementById('tb-absensi').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Belum ada data absensi.</td></tr>';
       }
     }
-
+    
     async function submitAbsensi(scannedId = null) {
       const idInput = scannedId || document.getElementById('a-id').value.trim().toUpperCase();
       if(!idInput) return showToast('Harap isi / scan ID Pedagang!', 'error');
