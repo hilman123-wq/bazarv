@@ -6,6 +6,8 @@
   <title>Bazar Al-Islam (Non-Tunai)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Tambahkan library html5-qrcode untuk akses kamera HP -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     /* Styling scrollbar tipis agar modern */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -395,7 +397,8 @@
             <td class="px-6 py-4"><span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">${s.rayon}</span></td>
             <td class="px-6 py-4 text-right font-mono font-medium text-green-600">${parseInt(s.saldo||0).toLocaleString('id-ID')}</td>
             <td class="px-6 py-4 text-center space-x-2">
-              <button onclick="showQR('${s.id_santri}', '${s.nama}')" class="text-gray-500 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors">🖨️ QR</button>
+              <!-- Tambahkan s.saldo pada parameter fungsi showQR -->
+              <button onclick="showQR('${s.id_santri}', '${s.nama}', ${s.saldo})" class="text-gray-500 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors">🖨️ QR</button>
               <button onclick='openModalSantri(${JSON.stringify(s)})' class="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-sm font-medium transition-colors">Edit</button>
               <button onclick="deleteSantri('${s.id_santri}')" class="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-sm font-medium transition-colors">Hapus</button>
             </td>
@@ -458,29 +461,50 @@
       });
     }
 
-    function showQR(id_santri, nama) {
+    function showQR(id_santri, nama, saldo) {
       const html = `
-        <div class="flex flex-col items-center py-4">
-           <h4 class="text-xl font-bold text-gray-800">${nama}</h4>
-           <p class="text-gray-500 mb-6 tracking-widest text-sm">${id_santri}</p>
+        <div class="flex flex-col items-center py-4 print:py-0">
            
-           <div id="qr-container" class="p-4 bg-white border-4 border-gray-100 rounded-xl shadow-sm mb-6 inline-block"></div>
+           <!-- Desain Tiket Voucher -->
+           <div class="bg-white border-2 border-dashed border-green-600 rounded-2xl p-6 shadow-md w-full max-w-sm text-center relative overflow-hidden">
+              <div class="absolute top-0 left-0 w-full h-3 bg-green-600"></div>
+              
+              <h3 class="text-xl font-extrabold text-green-800 uppercase tracking-widest mt-2">Voucher Bazar</h3>
+              <p class="text-xs text-gray-500 font-semibold mb-4 border-b pb-2">Ponpes Al-Islam</p>
+              
+              <h4 class="text-2xl font-bold text-gray-800 leading-tight">${nama}</h4>
+              <p class="text-gray-500 mb-4 tracking-widest text-sm font-mono mt-1">ID: ${id_santri}</p>
+              
+              <div class="bg-gray-50 p-3 rounded-xl inline-block mb-4 border border-gray-200">
+                <div id="qr-container" class="w-[180px] h-[180px] flex justify-center items-center"></div>
+              </div>
+              
+              <div class="bg-green-50 p-3 rounded-xl border border-green-200 mb-2">
+                 <p class="text-xs text-green-700 uppercase font-bold tracking-wider mb-1">Nilai Voucher (Saldo Awal)</p>
+                 <p class="text-3xl font-extrabold text-green-700">Rp ${parseInt(saldo||0).toLocaleString('id-ID')}</p>
+              </div>
+
+              <p class="text-[10px] text-red-500 mt-3 font-medium italic">
+                 *Voucher tidak dapat digunakan jika saldo telah habis.
+              </p>
+           </div>
            
-           <p class="text-xs text-center text-gray-400 bg-gray-50 p-3 rounded-lg border border-gray-100">
-             Cetak kode QR ini dan tempelkan pada Kartu Tanda Santri atau kalung ID sebagai alat pembayaran sah di area Bazar.
-           </p>
+           <button onclick="window.print()" class="mt-6 w-full max-w-sm bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors print:hidden">
+             🖨️ Cetak Voucher Ini
+           </button>
         </div>
       `;
       openModal('Cetak Kartu Voucher QR', html);
       
       // Delay sedikit agar DOM Modal selesai dimuat sebelum merender Canvas QR
       setTimeout(() => {
+        document.getElementById("qr-container").innerHTML = "";
         new QRCode(document.getElementById("qr-container"), {
           text: id_santri,
-          width: 220,
-          height: 220,
+          width: 180,
+          height: 180,
           colorDark : "#111827",
-          colorLight : "#ffffff",
+          colorLight : "#f9fafb", // Match bg-gray-50
           correctLevel : QRCode.CorrectLevel.H
         });
       }, 200);
@@ -881,9 +905,21 @@
           </div>
           
           <div class="bg-white p-6 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.05)] border border-gray-100">
+            
+            <!-- Area Kamera QR Code -->
+            <div class="mb-4">
+               <button type="button" id="btn-kamera" onclick="toggleKamera()" class="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-3 rounded-xl border border-indigo-200 transition-colors flex justify-center items-center gap-2">
+                 📷 Buka Kamera HP untuk Scan QR
+               </button>
+               <div id="reader-container" class="hidden mt-3 rounded-xl overflow-hidden border-2 border-indigo-500 relative">
+                 <div id="reader" class="w-full bg-black"></div>
+                 <p class="text-xs text-center p-2 bg-indigo-600 text-white font-medium">Arahkan kamera ke QR Code Voucher Santri</p>
+               </div>
+            </div>
+
             <div class="mb-5">
               <label class="block text-gray-700 font-bold mb-2 text-sm">QR Code / ID Pembeli</label>
-              <input type="text" id="j-id" class="w-full bg-gray-50 border-2 border-gray-200 focus:border-blue-500 p-4 rounded-xl outline-none font-mono uppercase text-lg" placeholder="Arahkan Scanner Disini" autofocus>
+              <input type="text" id="j-id" class="w-full bg-gray-50 border-2 border-gray-200 focus:border-blue-500 p-4 rounded-xl outline-none font-mono uppercase text-lg" placeholder="SNT-XXXX" autofocus>
             </div>
             <div class="mb-8">
               <label class="block text-gray-700 font-bold mb-2 text-sm">Total Belanjaan</label>
@@ -899,11 +935,83 @@
           </div>
           
           <!-- Tombol kembali ke Dashboard Utama -->
-          <button onclick="renderDashboardPedagang()" class="w-full mt-4 text-center text-gray-500 text-sm hover:text-gray-800 font-medium py-2">
+          <button onclick="stopKamera(); renderDashboardPedagang()" class="w-full mt-4 text-center text-gray-500 text-sm hover:text-gray-800 font-medium py-2">
             &larr; Kembali ke Home Stan Anda
           </button>
         </div>
       `;
+    }
+
+    // Variabel global untuk menyimpan state kamera
+    let html5QrCode = null;
+
+    function toggleKamera() {
+      const container = document.getElementById('reader-container');
+      const btnKamera = document.getElementById('btn-kamera');
+
+      // Jika kamera sedang menyala, matikan
+      if (html5QrCode && html5QrCode.isScanning) {
+        stopKamera();
+        return;
+      }
+
+      // Jika belum menyala, inisialisasi dan nyalakan
+      container.classList.remove('hidden');
+      btnKamera.innerHTML = '❌ Tutup Kamera';
+      btnKamera.classList.replace('bg-indigo-50', 'bg-red-50');
+      btnKamera.classList.replace('text-indigo-700', 'text-red-600');
+      btnKamera.classList.replace('border-indigo-200', 'border-red-200');
+
+      html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      
+      html5QrCode.start(
+        { facingMode: "environment" }, // Gunakan kamera belakang HP
+        config,
+        (decodedText) => {
+          // Ketika QR berhasil terbaca
+          document.getElementById('j-id').value = decodedText;
+          // Mainkan suara beep kecil (opsional jika support)
+          try { navigator.vibrate(200); } catch(e){}
+          
+          stopKamera();
+          showToast('QR Code berhasil di-scan!', 'info');
+          // Arahkan fokus ke input nominal belanja
+          document.getElementById('j-nom').focus();
+        },
+        (errorMessage) => {
+          // Abaikan error saat proses scan berlangsung (frame kosong, dll)
+        }
+      ).catch((err) => {
+        showToast('Gagal mengakses kamera. Pastikan Anda memberi izin kamera di browser.', 'error');
+        stopKamera();
+      });
+    }
+
+    function stopKamera() {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+          html5QrCode.clear();
+        }).catch(err => console.log(err));
+      }
+      
+      const container = document.getElementById('reader-container');
+      const btnKamera = document.getElementById('btn-kamera');
+      
+      if(container && btnKamera) {
+        container.classList.add('hidden');
+        btnKamera.innerHTML = '📷 Buka Kamera HP untuk Scan QR';
+        btnKamera.classList.replace('bg-red-50', 'bg-indigo-50');
+        btnKamera.classList.replace('text-red-600', 'text-indigo-700');
+        btnKamera.classList.replace('border-red-200', 'border-indigo-200');
+      }
+    }
+
+    // Modifikasi juga fungsi ganti menu agar jika pindah menu kamera mati
+    const originalLoadMenu = loadMenu;
+    loadMenu = function(index, btnEl) {
+       stopKamera(); // matikan kamera saat ganti menu
+       originalLoadMenu(index, btnEl);
     }
 
     async function submitJajan() {
