@@ -28,16 +28,6 @@
     const AppState = { user: null, mySaldo: 0 };
     const AppCache = {};
 
-    // PENGUATAN: Helper untuk mengubah link Google Drive menjadi link gambar langsung
-    function formatFotoUrl(url, nama) {
-        if(!url) return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(nama) + '&background=e0f2fe&color=0369a1&size=100';
-        let match = url.match(/\\/d\\/([a-zA-Z0-9_-]+)/);
-        if (match && match[1]) {
-            return 'https://drive.google.com/uc?export=view&id=' + match[1];
-        }
-        return url;
-    }
-
     function clearCache(tableName) {
       if (tableName) {
         delete AppCache[tableName];
@@ -195,6 +185,7 @@
                 </div>
                 <h3 class="text-2xl font-bold text-gray-800 mb-6 hidden md:block">Masuk ke Akun Anda</h3>
                 
+                <!-- PENGUATAN: Form dimatikan auto-reloadnya -->
                 <form onsubmit="event.preventDefault(); doLogin(); return false;" class="space-y-5">
                   <div>
                     <label class="block text-gray-700 font-medium mb-1.5 text-sm">Username / ID Pegawai</label>
@@ -1188,7 +1179,7 @@
     }
 
     // ==========================================
-    // TOPUP EDC (DENGAN FOTO)
+    // TOPUP EDC
     // ==========================================
     async function renderTopup() {
       document.getElementById('main-content').innerHTML = `
@@ -1198,7 +1189,7 @@
             <div class="mb-6">
               <label class="block font-bold mb-2">Pindai QR / Ketik ID / Nama</label>
               <div class="flex gap-2"><input type="text" id="t-id" class="flex-1 bg-gray-50 border-2 p-4 rounded-xl uppercase font-mono" placeholder="SNT-001"><button onclick="cekSantri()" class="bg-gray-800 text-white px-6 rounded-xl font-bold">Cari Akun</button></div>
-              <div id="t-info-box" class="mt-3 p-4 rounded-xl border bg-gray-50 hidden"></div>
+              <div id="t-info-box" class="mt-3 p-4 rounded-xl border bg-gray-50 hidden"><p id="t-nama" class="text-xl font-bold text-gray-800"></p></div>
             </div>
             <div class="mb-6"><label class="block font-bold mb-2">Nominal Topup (Rp)</label><input type="number" id="t-nom" class="w-full bg-gray-50 border-2 p-4 rounded-xl text-xl font-bold text-green-700" placeholder="0"></div>
             <div class="mb-8"><label class="block font-bold mb-2">Referensi Struk</label><input type="text" id="t-struk" class="w-full bg-gray-50 border-2 p-4 rounded-xl font-mono"></div>
@@ -1210,8 +1201,8 @@
 
     async function cekSantri() {
       const q = document.getElementById('t-id').value.trim(); if(!q) return;
-      const b = document.getElementById('t-info-box');
-      b.classList.remove('hidden'); b.innerHTML = 'Mencari...';
+      const b = document.getElementById('t-info-box'); const n = document.getElementById('t-nama');
+      b.classList.remove('hidden'); n.innerHTML = 'Mencari...';
       const d = await getTableData('Santri');
       if(d) {
         let s = null;
@@ -1221,11 +1212,8 @@
         if(s) {
            document.getElementById('t-id').value = s.id_santri;
            b.className = 'mt-3 p-4 rounded-xl border bg-green-50 border-green-200';
-           
-           let imgUrl = formatFotoUrl(s.foto, s.nama);
-           b.innerHTML = '<div class="flex items-center gap-4"><img src="' + imgUrl + '" class="w-14 h-14 rounded-full object-cover border-2 border-green-300 shadow-sm"><div class="flex-1"><div class="font-bold text-green-800 text-lg">✅ ' + s.nama + '</div><div class="text-sm font-medium text-green-700">Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</div></div></div>';
-           
-        } else { b.className = 'mt-3 p-4 rounded-xl border bg-red-50 border-red-200'; b.innerHTML = '❌ Tidak ditemukan!'; }
+           n.innerHTML = '✅ ' + s.nama + ' <br><span class="text-sm font-normal text-green-700">Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</span>';
+        } else { b.className = 'mt-3 p-4 rounded-xl border bg-red-50 border-red-200'; n.innerHTML = '❌ Tidak ditemukan!'; }
       }
     }
 
@@ -1240,7 +1228,7 @@
     }
 
     // ==========================================
-    // PEMBAYARAN KEGIATAN SANTRI (DENGAN FOTO)
+    // PEMBAYARAN KEGIATAN SANTRI
     // ==========================================
     async function renderBayarKegiatan() {
       document.getElementById('main-content').innerHTML = `
@@ -1281,10 +1269,7 @@
         if(s) {
            document.getElementById('b-id').value = s.id_santri;
            b.className = 'mt-3 p-3 rounded-xl border bg-green-50 border-green-200';
-           
-           let imgUrl = formatFotoUrl(s.foto, s.nama);
-           b.innerHTML = '<div class="flex items-center gap-4"><img src="' + imgUrl + '" class="w-14 h-14 rounded-full object-cover border-2 border-green-300 shadow-sm"><div class="flex-1"><div class="font-bold text-green-800 text-lg">✅ ' + s.nama + '</div><div class="text-sm font-medium text-green-700">Sisa Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</div></div></div>';
-           
+           b.innerHTML = '✅ ' + s.nama + ' <br><span class="text-sm font-medium text-green-700">Sisa Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</span>';
            document.getElementById('b-nom').focus();
         } else { b.className = 'mt-3 p-3 rounded-xl border bg-red-50 border-red-100'; b.innerHTML = '❌ Tidak ditemukan!'; }
       }
@@ -1313,7 +1298,7 @@
     }
 
     // ==========================================
-    // DASHBOARD & KASIR PEDAGANG (DENGAN FOTO)
+    // DASHBOARD & KASIR PEDAGANG
     // ==========================================
     async function renderDashboardPedagang() {
       document.getElementById('main-content').innerHTML = `
@@ -1378,10 +1363,7 @@
         if(s) {
            document.getElementById('j-id').value = s.id_santri;
            b.className = 'mt-3 p-3 rounded-xl border bg-green-50 border-green-200';
-           
-           let imgUrl = formatFotoUrl(s.foto, s.nama);
-           b.innerHTML = '<div class="flex items-center gap-4"><img src="' + imgUrl + '" class="w-14 h-14 rounded-full object-cover border-2 border-green-300 shadow-sm" onerror="this.src=\\'https://ui-avatars.com/api/?name=' + encodeURIComponent(s.nama) + '\\'"><div class="flex-1"><div class="font-bold text-green-800 text-lg">✅ ' + s.nama + '</div><div class="text-sm font-medium text-green-700">Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</div></div></div>';
-           
+           b.innerHTML = '✅ ' + s.nama + ' <br>Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID');
            document.getElementById('j-nom').focus();
         } else { b.className = 'mt-3 p-3 rounded-xl border bg-red-50 border-red-100 text-red-600 font-bold'; b.innerHTML = '❌ Tidak ditemukan!'; }
       }
