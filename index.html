@@ -260,7 +260,8 @@
         { id: 'master_santri', icon: '👨‍🎓', label: 'Master Santri', action: renderMasterSantri },
         { id: 'master_pedagang', icon: '🏪', label: 'Master Pedagang', action: renderMasterPedagang },
         { id: 'absensi_pedagang', icon: '📷', label: 'Absensi Pedagang', action: renderAbsensi },
-        { id: 'laporan_admin', icon: '📊', label: 'Laporan Global', action: renderLaporanGlobal }
+        { id: 'laporan_admin', icon: '📊', label: 'Laporan Global', action: renderLaporanGlobal },
+        { id: 'laporan_kegiatan', icon: '📝', label: 'Laporan Kegiatan', action: renderLaporanKegiatan }
       ],
       bendahara: [
         { id: 'dashboard_bendahara', icon: '🏠', label: 'Dashboard Utama', action: renderDashboardBendahara },
@@ -268,6 +269,7 @@
         { id: 'setoran_dana', icon: '📥', label: 'Setoran Pedagang', action: renderSetoran },
         { id: 'bayar_kegiatan', icon: '📋', label: 'Pembayaran Santri', action: renderBayarKegiatan },
         { id: 'laporan_bendahara', icon: '📉', label: 'Laporan Keuangan', action: renderLaporanGlobal }
+        { id: 'laporan_kegiatan', icon: '📝', label: 'Laporan Kegiatan', action: renderLaporanKegiatan }
       ],
       pedagang: [
         { id: 'jajan_input', icon: '🛒', label: 'Proses Jajan', action: renderInputJajan },
@@ -2196,6 +2198,152 @@
          }
       });
     }
+    // ==========================================
+    // LAPORAN PEMBAYARAN KEGIATAN SANTRI
+    // ==========================================
+    async function renderLaporanKegiatan() {
+      // Tampilkan animasi loading saat memuat data
+      document.getElementById('main-content').innerHTML = `
+        <div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600"></div></div>`;
+        
+      // Tarik Data dari Spreadsheet
+      const [sData, kData] = await Promise.all([ 
+        getTableData('Santri'), 
+        getTableData('Pembayaran_Kegiatan') 
+      ]);
+
+      // Buat struktur HTML Halaman Laporan
+      let html = `
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+           <div>
+              <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight">Laporan Pembayaran Santri</h2>
+              <p class="text-gray-500 mt-1">Pemantauan transaksi uang digital untuk kegiatan pondok.</p>
+           </div>
+           <button onclick="exportLaporanKegiatanCSV()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-md transition-colors">
+             📥 Download Rekap Excel
+           </button>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+           <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 rounded-3xl shadow-lg text-white">
+             <p class="text-indigo-100 text-sm uppercase font-bold tracking-widest mb-1">Total Dana Terkumpul</p>
+             <div id="card-total-keg" class="text-4xl font-extrabold mt-2">...</div>
+           </div>
+           <div class="bg-white border-2 border-indigo-100 p-6 rounded-3xl shadow-sm flex items-center justify-between">
+             <div>
+               <p class="text-indigo-500 text-sm uppercase font-bold tracking-widest mb-1">Volume Transaksi</p>
+               <div id="card-count-keg" class="text-4xl font-extrabold text-gray-800 mt-2">...</div>
+             </div>
+             <div class="text-5xl bg-indigo-50 p-4 rounded-2xl">📋</div>
+           </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-1">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-indigo-500 pl-3">Rekap per Kategori</h3>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <table class="w-full text-left whitespace-nowrap">
+                <thead class="bg-indigo-50 border-b border-indigo-100 text-indigo-800 uppercase text-xs font-bold">
+                  <tr><th class="px-4 py-3">Jenis Kegiatan</th><th class="px-4 py-3 text-right">Total (Rp)</th></tr>
+                </thead>
+                <tbody id="tb-rekap-keg" class="divide-y divide-gray-100">
+                  <tr><td colspan="2" class="px-4 py-6 text-center text-gray-500">Memuat...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="lg:col-span-2">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3">Log Transaksi Terbaru</h3>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+                <table class="w-full text-left whitespace-nowrap">
+                  <thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-xs font-bold sticky top-0">
+                    <tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Santri</th><th class="px-4 py-3">Pembayaran</th><th class="px-4 py-3 text-right">Nominal</th></tr>
+                  </thead>
+                  <tbody id="tb-riwayat-keg" class="divide-y divide-gray-100">
+                    <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Memuat...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Render tampilan HTML dasar dulu
+      document.getElementById('main-content').innerHTML = html;
+
+      // Pemetaan ID Santri ke Nama
+      const mapS = {}; 
+      if(sData) sData.forEach(s => mapS[s.id_santri] = s.nama);
+
+      // Isi Data ke dalam Tabel
+      if(kData && kData.length > 0) {
+         const totalUang = kData.reduce((sum, k) => sum + parseInt(k.nominal||0), 0);
+         document.getElementById('card-total-keg').innerHTML = `Rp ${totalUang.toLocaleString('id-ID')}`;
+         document.getElementById('card-count-keg').innerHTML = `${kData.length} <span class="text-lg font-normal text-gray-500">Trx</span>`;
+         
+         // Hitung total per masing-masing kegiatan (Renang, SPP, dll)
+         const rekap = {};
+         kData.forEach(k => { 
+             const keg = k.kegiatan || 'Lainnya'; 
+             if(!rekap[keg]) rekap[keg]=0; 
+             rekap[keg] += parseInt(k.nominal||0); 
+         });
+         
+         let rH = ''; 
+         Object.entries(rekap).sort((a,b)=>b[1]-a[1]).forEach(([keg, t]) => { 
+             rH += `<tr class="hover:bg-indigo-50/50"><td class="px-4 py-3 font-semibold text-gray-800">${keg}</td><td class="px-4 py-3 text-right font-mono font-bold text-indigo-700">${t.toLocaleString('id-ID')}</td></tr>`; 
+         });
+         document.getElementById('tb-rekap-keg').innerHTML = rH;
+
+         // Tampilkan daftar transaksi terbaru
+         const rec = kData.reverse().slice(0, 100);
+         document.getElementById('tb-riwayat-keg').innerHTML = rec.map(t => `
+            <tr class="hover:bg-gray-50">
+               <td class="px-4 py-3 text-xs text-gray-500">${t.waktu||t.tanggal||'-'}</td>
+               <td class="px-4 py-3 text-sm">
+                 <div class="font-bold text-gray-800">${mapS[t.id_santri]||'-'}</div>
+                 <div class="text-[10px] text-gray-400 font-mono">${t.id_santri}</div>
+               </td>
+               <td class="px-4 py-3 text-sm text-indigo-700 font-bold uppercase tracking-wider">${t.kegiatan}</td>
+               <td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td>
+            </tr>
+         `).join('');
+      } else {
+         document.getElementById('card-total-keg').innerHTML = `Rp 0`; 
+         document.getElementById('card-count-keg').innerHTML = `0`;
+         document.getElementById('tb-rekap-keg').innerHTML = `<tr><td colspan="2" class="px-4 py-8 text-center text-gray-400">Belum ada transaksi.</td></tr>`;
+         document.getElementById('tb-riwayat-keg').innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Belum ada transaksi kegiatan.</td></tr>`;
+      }
+    }
+
+    // Eksekusi Download Excel
+    window.exportLaporanKegiatanCSV = function() {
+        const kData = AppCache['Pembayaran_Kegiatan']; 
+        const sData = AppCache['Santri'];
+        
+        if(!kData || kData.length === 0) return showToast('Belum ada data untuk didownload', 'error');
+        
+        const mapS = {}; 
+        if(sData) sData.forEach(s => mapS[s.id_santri] = s.nama);
+        
+        let csv = "ID Transaksi;Waktu;ID Santri;Nama Santri;Jenis Kegiatan;Nominal Potongan;Petugas\n";
+        let tot = 0;
+        
+        [...kData].reverse().forEach(t => { 
+            const nom = parseInt(t.nominal||0); 
+            tot += nom; 
+            csv += `${t.id_trx||'-'};${t.waktu||t.tanggal||'-'};${t.id_santri};${mapS[t.id_santri]||'-'};${t.kegiatan};${nom};${t.petugas||'-'}\n`; 
+        });
+        
+        csv += `\nTOTAL;;;;;${tot};\n`;
+        
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' }));
+        link.download = `Laporan_Pembayaran_Santri_${new Date().toISOString().split('T')[0]}.csv`; 
+        link.click();
+    };
 
   </script>
 </body>
