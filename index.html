@@ -1037,17 +1037,25 @@
 
     async function renderLaporanGlobal() {
       document.getElementById('main-content').innerHTML = `
-        <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-2">Laporan & Statistik</h2>
-        <p class="text-gray-500 mb-8">Pemantauan perputaran uang dan setoran tunai.</p>
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+           <div>
+              <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-1">Laporan & Statistik</h2>
+              <p class="text-gray-500">Pemantauan perputaran uang dan setoran tunai.</p>
+           </div>
+           <button onclick="exportLaporanCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-md font-bold flex items-center gap-2 transition-transform active:scale-95">
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+             Download Excel (CSV)
+           </button>
+        </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
            <div class="bg-gradient-to-br from-blue-500 to-blue-700 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
              <p class="text-blue-100 text-xs uppercase font-bold tracking-wider mb-1">Total Uang Beredar</p>
              <div id="card-beredar" class="text-3xl font-extrabold mt-2"><span class="animate-pulse bg-blue-400/50 h-8 w-24 rounded inline-block"></span></div>
            </div>
            
            <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
-             <p class="text-emerald-100 text-xs uppercase font-bold tracking-wider mb-1">Volume Jajan (All Time)</p>
+             <p class="text-emerald-100 text-xs uppercase font-bold tracking-wider mb-1">Volume Jajan</p>
              <div id="card-trx" class="text-3xl font-extrabold mt-2"><span class="animate-pulse bg-emerald-400/50 h-8 w-24 rounded inline-block"></span></div>
            </div>
 
@@ -1062,6 +1070,29 @@
            </div>
         </div>
         
+        <!-- TABEL BARU: REKAP PER PEDAGANG -->
+        <div class="mb-8">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-emerald-500 pl-3">Rekap Setoran per Pedagang</h3>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+               <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+                 <table class="w-full text-left whitespace-nowrap">
+                   <thead class="bg-emerald-50 border-b border-emerald-100 text-emerald-800 uppercase text-xs font-bold sticky top-0 z-10">
+                     <tr>
+                       <th class="px-4 py-3">ID Pedagang</th>
+                       <th class="px-4 py-3">Nama Pedagang</th>
+                       <th class="px-4 py-3 text-right">Total Shodaqoh</th>
+                       <th class="px-4 py-3 text-right">Total Sewa Tenda</th>
+                       <th class="px-4 py-3 text-right">Grand Total</th>
+                     </tr>
+                   </thead>
+                   <tbody id="table-rekap-pedagang" class="divide-y divide-gray-100">
+                     <tr><td colspan="5" class="px-4 py-6 text-center text-gray-500">Memuat rekap data...</td></tr>
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3">Riwayat Transaksi Jajan</h3>
@@ -1105,7 +1136,6 @@
         </div>
       `;
       
-      // Ambil data secara paralel dari cache agar super cepat
       const [santriData, pdgData, trxData, setoranData] = await Promise.all([
         getTableData('Santri'),
         getTableData('Pedagang'),
@@ -1113,7 +1143,6 @@
         getTableData('Setoran')
       ]);
 
-      // Buat kamus (map) untuk menterjemahkan ID menjadi Nama dengan cepat
       const mapSantri = {};
       if (santriData) santriData.forEach(s => mapSantri[s.id_santri] = s.nama);
       
@@ -1127,12 +1156,10 @@
          document.getElementById('card-beredar').innerHTML = `<span class="text-lg mr-1 font-normal">Rp</span>${totalBeredar.toLocaleString('id-ID')}`;
          document.getElementById('card-trx').innerHTML = `<span class="text-lg mr-1 font-normal">Rp</span>${totalTrx.toLocaleString('id-ID')}`;
          
-         const recentTrx = trxData.reverse().slice(0, 50); // Tampilkan max 50 riwayat terakhir
+         const recentTrx = trxData.reverse().slice(0, 50); 
          document.getElementById('table-riwayat').innerHTML = recentTrx.map(t => {
-           // Menterjemahkan ID ke Nama
            const namaPembeli = mapSantri[t.id_santri] || t.id_santri;
            const namaToko = mapPdg[t.id_pedagang] || t.id_pedagang;
-           
            return `
              <tr class="hover:bg-gray-50">
                <td class="px-4 py-3 text-xs text-gray-500">${t.tanggal}</td>
@@ -1141,18 +1168,44 @@
                  <div class="text-xs text-emerald-600 mt-0.5">➔ ${namaToko}</div>
                </td>
                <td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td>
-             </tr>
-           `;
+             </tr>`;
          }).join('') || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada log transaksi.</td></tr>';
       }
 
       if (setoranData) {
+         // Kalkulasi Global
          const totalShodaqoh = setoranData.filter(s => s.jenis === 'Shodaqoh').reduce((sum, s) => sum + parseInt(s.nominal||0), 0);
          const totalSewa = setoranData.filter(s => s.jenis === 'Sewa Tenda').reduce((sum, s) => sum + parseInt(s.nominal||0), 0);
 
          document.getElementById('card-shodaqoh').innerHTML = `<span class="text-lg mr-1 font-normal">Rp</span>${totalShodaqoh.toLocaleString('id-ID')}`;
          document.getElementById('card-sewa').innerHTML = `<span class="text-lg mr-1 font-normal">Rp</span>${totalSewa.toLocaleString('id-ID')}`;
 
+         // Kalkulasi Rekap Per Pedagang
+         const rekapSetoran = {};
+         setoranData.forEach(s => {
+             if(!rekapSetoran[s.id_pedagang]) {
+                 rekapSetoran[s.id_pedagang] = { nama: s.nama_pedagang, shodaqoh: 0, sewa: 0 };
+             }
+             let nom = parseInt(s.nominal||0);
+             if(s.jenis === 'Shodaqoh') rekapSetoran[s.id_pedagang].shodaqoh += nom;
+             if(s.jenis === 'Sewa Tenda') rekapSetoran[s.id_pedagang].sewa += nom;
+         });
+
+         let rekapHtml = '';
+         for (const [id, data] of Object.entries(rekapSetoran)) {
+             let grandTotal = data.shodaqoh + data.sewa;
+             rekapHtml += `
+             <tr class="hover:bg-emerald-50/50">
+               <td class="px-4 py-3 font-mono text-sm text-gray-500">${id}</td>
+               <td class="px-4 py-3 font-bold text-gray-800">${data.nama}</td>
+               <td class="px-4 py-3 text-right text-indigo-700 font-semibold">Rp ${data.shodaqoh.toLocaleString('id-ID')}</td>
+               <td class="px-4 py-3 text-right text-purple-700 font-semibold">Rp ${data.sewa.toLocaleString('id-ID')}</td>
+               <td class="px-4 py-3 text-right font-extrabold text-emerald-700 bg-emerald-50/30">Rp ${grandTotal.toLocaleString('id-ID')}</td>
+             </tr>`;
+         }
+         document.getElementById('table-rekap-pedagang').innerHTML = rekapHtml || '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Belum ada data setoran pedagang.</td></tr>';
+
+         // Render History Table
          const recentSetoran = setoranData.reverse().slice(0, 50);
          document.getElementById('table-setoran').innerHTML = recentSetoran.map(t => `
            <tr class="hover:bg-gray-50">
@@ -1924,7 +1977,53 @@
             showToast('✅ Data berhasil diperbarui dari Server!');
         }, 1000);
     };
-   
+
+    // ==========================================
+    // FITUR EXPORT / DOWNLOAD LAPORAN (EXCEL/CSV)
+    // ==========================================
+    window.exportLaporanCSV = function() {
+        const setoranData = AppCache['Setoran'];
+        if(!setoranData || setoranData.length === 0) {
+            return showToast('Tidak ada data setoran untuk di-download!', 'error');
+        }
+        
+        // Buat Kamus Rekap
+        const rekap = {};
+        let totalAllShodaqoh = 0;
+        let totalAllSewa = 0;
+
+        setoranData.forEach(s => {
+            if(!rekap[s.id_pedagang]) rekap[s.id_pedagang] = { nama: s.nama_pedagang, shodaqoh: 0, sewa: 0 };
+            let nom = parseInt(s.nominal||0);
+            if(s.jenis === 'Shodaqoh') { rekap[s.id_pedagang].shodaqoh += nom; totalAllShodaqoh += nom; }
+            if(s.jenis === 'Sewa Tenda') { rekap[s.id_pedagang].sewa += nom; totalAllSewa += nom; }
+        });
+
+        // Susun teks format CSV (Menggunakan pemisah Titik Koma agar rapih di Excel Indonesia)
+        let csvContent = "ID Pedagang;Nama Pedagang;Total Shodaqoh;Total Sewa Tenda;Grand Total\n";
+        
+        for (const [id, data] of Object.entries(rekap)) {
+            let grandTotal = data.shodaqoh + data.sewa;
+            csvContent += `${id};${data.nama};${data.shodaqoh};${data.sewa};${grandTotal}\n`;
+        }
+        
+        // Tambahkan baris paling bawah untuk Total Semua
+        csvContent += `\nTOTAL KESELURUHAN;;${totalAllShodaqoh};${totalAllSewa};${totalAllShodaqoh + totalAllSewa}\n`;
+        
+        // Proses Download File
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Rekap_Setoran_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast('Laporan berhasil di-download! Silakan buka menggunakan Excel.');
+    };
+
   </script>
 </body>
 </html>
