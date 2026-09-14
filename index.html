@@ -261,7 +261,6 @@
         { id: 'master_pedagang', icon: '🏪', label: 'Master Pedagang', action: renderMasterPedagang },
         { id: 'absensi_pedagang', icon: '📷', label: 'Absensi Pedagang', action: renderAbsensi },
         { id: 'laporan_admin', icon: '📊', label: 'Laporan Global', action: renderLaporanGlobal }
-        { id: 'laporan_kegiatan', icon: '📝', label: 'Laporan Kegiatan', action: renderLaporanKegiatan }
       ],
       bendahara: [
         { id: 'dashboard_bendahara', icon: '🏠', label: 'Dashboard Utama', action: renderDashboardBendahara },
@@ -269,7 +268,6 @@
         { id: 'setoran_dana', icon: '📥', label: 'Setoran Pedagang', action: renderSetoran },
         { id: 'bayar_kegiatan', icon: '📋', label: 'Pembayaran Santri', action: renderBayarKegiatan },
         { id: 'laporan_bendahara', icon: '📉', label: 'Laporan Keuangan', action: renderLaporanGlobal }
-        { id: 'laporan_kegiatan', icon: '📝', label: 'Laporan Kegiatan', action: renderLaporanKegiatan }
       ],
       pedagang: [
         { id: 'jajan_input', icon: '🛒', label: 'Proses Jajan', action: renderInputJajan },
@@ -1044,7 +1042,7 @@
       document.getElementById('main-content').innerHTML = `
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
            <div>
-              <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-1">Laporan Khusus Bazar</h2>
+              <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-1">Laporan & Statistik</h2>
               <p class="text-gray-500">Pemantauan perputaran uang dan setoran tunai.</p>
            </div>
            <button onclick="exportLaporanCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-md font-bold flex items-center gap-2 transition-transform active:scale-95">
@@ -1793,7 +1791,6 @@
         }
       });
     }
-
     // ==========================================
     // FITUR DASHBOARD UTAMA ADMIN & BENDAHARA
     // ==========================================
@@ -2199,181 +2196,6 @@
          }
       });
     }
-
-    // ==========================================
-    // FITUR LAPORAN KHUSUS PEMBAYARAN KEGIATAN
-    // ==========================================
-    async function renderLaporanKegiatan() {
-      document.getElementById('main-content').innerHTML = `
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-           <div>
-              <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-1">Laporan Pembayaran Kegiatan</h2>
-              <p class="text-gray-500">Pemantauan transaksi uang digital untuk kegiatan pondok & santri.</p>
-           </div>
-           <button onclick="exportLaporanKegiatanCSV()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-md font-bold flex items-center gap-2 transition-transform active:scale-95">
-             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-             Download Rekap Excel
-           </button>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-           <!-- Card Total -->
-           <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
-             <p class="text-indigo-100 text-xs uppercase font-bold tracking-wider mb-1">Total Dana Kegiatan Terkumpul</p>
-             <div id="card-total-kegiatan" class="text-4xl font-extrabold mt-2"><span class="animate-pulse bg-indigo-400/50 h-10 w-32 rounded inline-block"></span></div>
-           </div>
-           <!-- Card Transaksi -->
-           <div class="bg-white border-2 border-indigo-100 p-6 rounded-2xl shadow-sm relative overflow-hidden flex items-center justify-between">
-             <div>
-                 <p class="text-indigo-500 text-xs uppercase font-bold tracking-wider mb-1">Volume Transaksi</p>
-                 <div id="card-count-kegiatan" class="text-4xl font-extrabold text-gray-800 mt-2"><span class="animate-pulse bg-gray-200 h-10 w-16 rounded inline-block"></span></div>
-             </div>
-             <div class="text-5xl">📋</div>
-           </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <!-- Tabel Rekap per Kategori -->
-          <div class="lg:col-span-1">
-            <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-indigo-500 pl-3">Rekap per Kategori</h3>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-               <table class="w-full text-left whitespace-nowrap">
-                 <thead class="bg-indigo-50 border-b border-indigo-100 text-indigo-800 uppercase text-xs font-bold">
-                   <tr>
-                     <th class="px-4 py-3">Jenis Pembayaran</th>
-                     <th class="px-4 py-3 text-right">Total (Rp)</th>
-                   </tr>
-                 </thead>
-                 <tbody id="table-rekap-kegiatan" class="divide-y divide-gray-100">
-                   <tr><td colspan="2" class="px-4 py-6 text-center text-gray-500">Memuat rekap...</td></tr>
-                 </tbody>
-               </table>
-            </div>
-          </div>
-
-          <!-- Tabel Riwayat Transaksi -->
-          <div class="lg:col-span-2">
-            <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3">Log Transaksi Terbaru</h3>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-               <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
-                 <table class="w-full text-left whitespace-nowrap">
-                   <thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-xs font-bold sticky top-0">
-                     <tr>
-                       <th class="px-4 py-3">Waktu</th>
-                       <th class="px-4 py-3">Data Santri</th>
-                       <th class="px-4 py-3">Pembayaran</th>
-                       <th class="px-4 py-3 text-right">Nominal</th>
-                     </tr>
-                   </thead>
-                   <tbody id="table-riwayat-kegiatan" class="divide-y divide-gray-100">
-                     <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Memuat log transaksi...</td></tr>
-                   </tbody>
-                 </table>
-               </div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      // Tarik Data
-      const [santriData, kegiatanData] = await Promise.all([
-        getTableData('Santri'),
-        getTableData('Pembayaran_Kegiatan')
-      ]);
-
-      const mapSantri = {};
-      if (santriData) santriData.forEach(s => mapSantri[s.id_santri] = s.nama);
-
-      if(kegiatanData && kegiatanData.length > 0) {
-         // Kalkulasi Total
-         const totalNominal = kegiatanData.reduce((sum, k) => sum + parseInt(k.nominal||0), 0);
-         document.getElementById('card-total-kegiatan').innerHTML = `<span class="text-xl mr-1 font-normal">Rp</span>${totalNominal.toLocaleString('id-ID')}`;
-         document.getElementById('card-count-kegiatan').innerHTML = `${kegiatanData.length} <span class="text-sm font-normal text-gray-500">Trx Terproses</span>`;
-
-         // Kalkulasi Rekap per Kegiatan (Renang, Seragam, dll)
-         const rekap = {};
-         kegiatanData.forEach(k => {
-             const keg = k.kegiatan || 'Lainnya';
-             if(!rekap[keg]) rekap[keg] = 0;
-             rekap[keg] += parseInt(k.nominal||0);
-         });
-
-         let rekapHtml = '';
-         Object.entries(rekap).sort((a,b)=>b[1]-a[1]).forEach(([keg, total]) => {
-             rekapHtml += `
-             <tr class="hover:bg-gray-50">
-               <td class="px-4 py-3 font-semibold text-gray-800">${keg}</td>
-               <td class="px-4 py-3 text-right font-mono font-bold text-indigo-600">${total.toLocaleString('id-ID')}</td>
-             </tr>`;
-         });
-         document.getElementById('table-rekap-kegiatan').innerHTML = rekapHtml;
-
-         // List History Tabel
-         const recent = kegiatanData.reverse().slice(0, 100);
-         document.getElementById('table-riwayat-kegiatan').innerHTML = recent.map(t => {
-            const nama = mapSantri[t.id_santri] || "Tidak Ditemukan";
-            return `
-            <tr class="hover:bg-gray-50">
-               <td class="px-4 py-3 text-xs text-gray-500">${t.waktu || t.tanggal || '-'}</td>
-               <td class="px-4 py-3 text-sm">
-                 <div class="font-bold text-gray-800">${nama}</div>
-                 <div class="text-[10px] text-gray-400 font-mono">${t.id_santri}</div>
-               </td>
-               <td class="px-4 py-3 text-sm font-semibold text-indigo-700">${t.kegiatan}</td>
-               <td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td>
-            </tr>`;
-         }).join('');
-
-      } else {
-         // Jika kosong
-         document.getElementById('card-total-kegiatan').innerHTML = `Rp 0`;
-         document.getElementById('card-count-kegiatan').innerHTML = `0`;
-         document.getElementById('table-rekap-kegiatan').innerHTML = `<tr><td colspan="2" class="px-4 py-8 text-center text-gray-500">Belum ada data.</td></tr>`;
-         document.getElementById('table-riwayat-kegiatan').innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">Belum ada transaksi kegiatan.</td></tr>`;
-      }
-    }
-
-    // Fungsi Export CSV Laporan Kegiatan
-    window.exportLaporanKegiatanCSV = async function() {
-        const kegiatanData = AppCache['Pembayaran_Kegiatan'];
-        const santriData = AppCache['Santri'];
-        
-        if(!kegiatanData || kegiatanData.length === 0) {
-            return showToast('Tidak ada data pembayaran kegiatan untuk di-download!', 'error');
-        }
-
-        const mapSantri = {};
-        if(santriData) santriData.forEach(s => mapSantri[s.id_santri] = s.nama);
-
-        // Header CSV
-        let csvContent = "ID Transaksi;Waktu;ID Santri;Nama Santri;Jenis Kegiatan;Nominal Potongan;Petugas EDC\n";
-        let total = 0;
-
-        const sortedData = [...kegiatanData].reverse(); // Urutkan terbaru di atas
-
-        sortedData.forEach(t => {
-            const nama = mapSantri[t.id_santri] || "-";
-            const nom = parseInt(t.nominal||0);
-            total += nom;
-            csvContent += `${t.id_trx || '-'};${t.waktu || t.tanggal || '-'};${t.id_santri};${nama};${t.kegiatan};${nom};${t.petugas || '-'}\n`;
-        });
-
-        // Baris Total Bawah
-        csvContent += `\nTOTAL KESELURUHAN PENDAPATAN KEGIATAN;;;;;${total};\n`;
-
-        // Download eksekusi
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Laporan_Kegiatan_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        showToast('✅ Laporan Kegiatan berhasil di-download!');
-    };
 
   </script>
 </body>
