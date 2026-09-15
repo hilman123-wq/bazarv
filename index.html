@@ -1139,13 +1139,19 @@
     }
 
     // ==========================================
-    // LAPORAN BAZAR GLOBAL
+    // LAPORAN BAZAR GLOBAL (LENGKAP DENGAN RIWAYAT)
     // ==========================================
     async function renderLaporanGlobal() {
-      document.getElementById('main-content').innerHTML = `
+      document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div></div>';
+
+      const [santriData, pdgData, trxData, setoranData] = await Promise.all([ 
+          getTableData('Santri'), getTableData('Pedagang'), getTableData('Transaksi'), getTableData('Setoran') 
+      ]);
+
+      let html = `
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
            <div><h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-1">Laporan Khusus Bazar</h2><p class="text-gray-500">Pemantauan perputaran uang dan setoran tunai bazar.</p></div>
-           <button onclick="exportLaporanCSV()" class="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2">Download Excel (CSV)</button>
+           <button onclick="exportLaporanCSV()" class="bg-emerald-600 hover:bg-emerald-700 transition-colors text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2">📥 Download Excel (CSV)</button>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
            <div class="bg-gradient-to-br from-blue-500 to-blue-700 p-5 rounded-2xl shadow-lg text-white"><p class="text-xs uppercase font-bold mb-1">Uang Beredar</p><div id="card-beredar" class="text-3xl font-extrabold mt-2">...</div></div>
@@ -1153,22 +1159,65 @@
            <div class="bg-white border-2 border-indigo-100 p-5 rounded-2xl"><p class="text-indigo-500 text-xs uppercase font-bold mb-1">Total Shodaqoh</p><div id="card-shodaqoh" class="text-3xl font-extrabold text-indigo-700 mt-2">...</div></div>
            <div class="bg-white border-2 border-purple-100 p-5 rounded-2xl"><p class="text-purple-500 text-xs uppercase font-bold mb-1">Total Sewa Tenda</p><div id="card-sewa" class="text-3xl font-extrabold text-purple-700 mt-2">...</div></div>
         </div>
+        
         <div class="mb-8">
             <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-emerald-500 pl-3">Rekap Setoran per Pedagang</h3>
-            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-               <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
-                 <table class="w-full text-left whitespace-nowrap"><thead class="bg-emerald-50 border-b text-emerald-800 uppercase text-xs font-bold sticky top-0"><tr><th class="px-4 py-3">ID Pedagang</th><th class="px-4 py-3">Nama</th><th class="px-4 py-3 text-right">Total Shodaqoh</th><th class="px-4 py-3 text-right">Total Sewa</th><th class="px-4 py-3 text-right">Grand Total</th></tr></thead><tbody id="table-rekap-pedagang" class="divide-y"><tr><td colspan="5" class="px-4 py-6 text-center">Memuat rekap...</td></tr></tbody></table>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+               <div class="overflow-x-auto max-h-[300px] overflow-y-auto">
+                 <table class="w-full text-left whitespace-nowrap"><thead class="bg-emerald-50 border-b border-emerald-100 text-emerald-800 uppercase text-xs font-bold sticky top-0"><tr><th class="px-4 py-3">ID Pedagang</th><th class="px-4 py-3">Nama</th><th class="px-4 py-3 text-right">Total Shodaqoh</th><th class="px-4 py-3 text-right">Total Sewa</th><th class="px-4 py-3 text-right">Grand Total</th></tr></thead><tbody id="table-rekap-pedagang" class="divide-y divide-gray-100"><tr><td colspan="5" class="px-4 py-6 text-center">Memuat rekap...</td></tr></tbody></table>
                </div>
             </div>
         </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
+          <div>
+            <h3 class="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-3">Riwayat Transaksi Jajan</h3>
+            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+               <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+                 <table class="w-full text-left whitespace-nowrap">
+                   <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px] font-bold sticky top-0">
+                     <tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Santri & Toko</th><th class="px-4 py-3 text-right">Nominal</th></tr>
+                   </thead>
+                   <tbody id="table-riwayat" class="divide-y divide-gray-100"><tr><td colspan="3" class="px-4 py-6 text-center">Memuat...</td></tr></tbody>
+                 </table>
+               </div>
+            </div>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold mb-4 border-l-4 border-indigo-500 pl-3">Riwayat Setoran (Tunai)</h3>
+            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+               <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+                 <table class="w-full text-left whitespace-nowrap">
+                   <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px] font-bold sticky top-0">
+                     <tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Pedagang & Jenis</th><th class="px-4 py-3 text-right">Nominal</th></tr>
+                   </thead>
+                   <tbody id="table-setoran" class="divide-y divide-gray-100"><tr><td colspan="3" class="px-4 py-6 text-center">Memuat...</td></tr></tbody>
+                 </table>
+               </div>
+            </div>
+          </div>
+        </div>
       `;
+      document.getElementById('main-content').innerHTML = html;
       
-      const [santriData, pdgData, trxData, setoranData] = await Promise.all([ getTableData('Santri'), getTableData('Pedagang'), getTableData('Transaksi'), getTableData('Setoran') ]);
+      const mapSantri = {}; if (santriData) santriData.forEach(s => mapSantri[s.id_santri] = s.nama);
+      const mapPdg = {}; if (pdgData) pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
+
       if (santriData && trxData) {
          let sumBeredar = 0; santriData.forEach(function(x){ sumBeredar += parseInt(x.saldo||0); });
          let sumTrx = 0; trxData.forEach(function(x){ sumTrx += parseInt(x.nominal||0); });
+         
          document.getElementById('card-beredar').innerHTML = 'Rp ' + sumBeredar.toLocaleString('id-ID');
          document.getElementById('card-trx').innerHTML = 'Rp ' + sumTrx.toLocaleString('id-ID');
+         
+         // Menampilkan 100 transaksi jajan terbaru
+         const recentTrx = [].concat(trxData).reverse().slice(0, 100); 
+         let trxHTML = '';
+         for(let i=0; i<recentTrx.length; i++) {
+             let t = recentTrx[i];
+             trxHTML += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-[11px] text-gray-500 whitespace-normal">' + (t.waktu || t.tanggal || '-') + '</td><td class="px-4 py-3 text-sm"><div class="font-bold text-blue-700">' + (mapSantri[t.id_santri]||t.id_santri) + '</div><div class="text-xs text-emerald-600 font-semibold">➔ ' + (mapPdg[t.id_pedagang]||t.id_pedagang) + '</div></td><td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ' + parseInt(t.nominal||0).toLocaleString('id-ID') + '</td></tr>';
+         }
+         document.getElementById('table-riwayat').innerHTML = trxHTML || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada transaksi jajan.</td></tr>';
       }
 
       if (setoranData) {
@@ -1182,7 +1231,7 @@
 
          const rekap = {};
          setoranData.forEach(function(s) {
-             if(!rekap[s.id_pedagang]) rekap[s.id_pedagang] = { nama: s.nama_pedagang, shodaqoh: 0, sewa: 0 };
+             if(!rekap[s.id_pedagang]) rekap[s.id_pedagang] = { nama: (mapPdg[s.id_pedagang] || s.nama_pedagang), shodaqoh: 0, sewa: 0 };
              let nom = parseInt(s.nominal||0);
              if(s.jenis === 'Shodaqoh') rekap[s.id_pedagang].shodaqoh += nom;
              if(s.jenis === 'Sewa Tenda') rekap[s.id_pedagang].sewa += nom;
@@ -1193,7 +1242,16 @@
              let data = rekap[id];
              rHtml += '<tr class="hover:bg-emerald-50/50"><td class="px-4 py-3 font-mono text-sm">' + id + '</td><td class="px-4 py-3 font-bold">' + data.nama + '</td><td class="px-4 py-3 text-right text-indigo-700">Rp ' + data.shodaqoh.toLocaleString('id-ID') + '</td><td class="px-4 py-3 text-right text-purple-700">Rp ' + data.sewa.toLocaleString('id-ID') + '</td><td class="px-4 py-3 text-right font-extrabold text-emerald-700 bg-emerald-50/30">Rp ' + (data.shodaqoh+data.sewa).toLocaleString('id-ID') + '</td></tr>';
          }
-         document.getElementById('table-rekap-pedagang').innerHTML = rHtml || '<tr><td colspan="5" class="px-4 py-8 text-center">Belum ada.</td></tr>';
+         document.getElementById('table-rekap-pedagang').innerHTML = rHtml || '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Belum ada data setoran.</td></tr>';
+
+         // Menampilkan 100 riwayat setoran terbaru
+         const recentSet = [].concat(setoranData).reverse().slice(0, 100);
+         let setHTML = '';
+         for(let i=0; i<recentSet.length; i++) {
+             let t = recentSet[i];
+             setHTML += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-[11px] text-gray-500 whitespace-normal">' + (t.waktu || t.tanggal || '-') + '</td><td class="px-4 py-3 text-sm"><div class="font-bold text-gray-800">' + (mapPdg[t.id_pedagang] || t.nama_pedagang) + '</div><div class="text-[10px] tracking-wider uppercase font-bold text-indigo-600 mt-0.5">' + t.jenis + '</div></td><td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ' + parseInt(t.nominal||0).toLocaleString('id-ID') + '</td></tr>';
+         }
+         document.getElementById('table-setoran').innerHTML = setHTML || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada riwayat setoran.</td></tr>';
       }
     }
 
