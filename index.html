@@ -1139,8 +1139,75 @@
     }
 
     // ==========================================
-    // LAPORAN BAZAR GLOBAL (LENGKAP DENGAN RIWAYAT)
+    // LAPORAN BAZAR GLOBAL (DENGAN PAGINASI)
     // ==========================================
+    window.currentTrxPage = 1;
+    window.currentSetoranPage = 1;
+
+    window.renderTrxPage = function(page) {
+       const trxData = AppCache['Transaksi'] || [];
+       const santriData = AppCache['Santri'] || [];
+       const pdgData = AppCache['Pedagang'] || [];
+       const mapSantri = {}; santriData.forEach(s => mapSantri[s.id_santri] = s.nama);
+       const mapPdg = {}; pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
+       
+       const reversed = [].concat(trxData).reverse();
+       const totalPages = Math.ceil(reversed.length / 100) || 1;
+       
+       if (page < 1) page = 1;
+       if (page > totalPages) page = totalPages;
+       window.currentTrxPage = page;
+       
+       const start = (page - 1) * 100;
+       const sliced = reversed.slice(start, start + 100);
+       
+       let html = '';
+       for(let i=0; i<sliced.length; i++) {
+           let t = sliced[i];
+           html += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-[11px] text-gray-500 whitespace-normal">' + (t.waktu || t.tanggal || '-') + '</td><td class="px-4 py-3 text-sm"><div class="font-bold text-blue-700">' + (mapSantri[t.id_santri]||t.id_santri) + '</div><div class="text-xs text-emerald-600 font-semibold">➔ ' + (mapPdg[t.id_pedagang]||t.id_pedagang) + '</div></td><td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ' + parseInt(t.nominal||0).toLocaleString('id-ID') + '</td></tr>';
+       }
+       document.getElementById('table-riwayat').innerHTML = html || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada transaksi jajan.</td></tr>';
+       
+       let pInfo = document.getElementById('page-info-trx');
+       let bPrev = document.getElementById('btn-prev-trx');
+       let bNext = document.getElementById('btn-next-trx');
+       if(pInfo) pInfo.innerText = `Hal ${page} dari ${totalPages}`;
+       if(bPrev) { bPrev.disabled = (page === 1); bPrev.className = (page === 1) ? "text-gray-400 font-bold px-3 py-1.5 rounded bg-gray-100 cursor-not-allowed" : "text-blue-600 font-bold px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 transition-colors"; }
+       if(bNext) { bNext.disabled = (page === totalPages); bNext.className = (page === totalPages) ? "text-gray-400 font-bold px-3 py-1.5 rounded bg-gray-100 cursor-not-allowed" : "text-blue-600 font-bold px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 transition-colors"; }
+    };
+    window.changePageTrx = function(dir) { window.renderTrxPage(window.currentTrxPage + dir); };
+
+    window.renderSetoranPage = function(page) {
+       const setData = AppCache['Setoran'] || [];
+       const pdgData = AppCache['Pedagang'] || [];
+       const mapPdg = {}; pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
+       
+       const reversed = [].concat(setData).reverse();
+       const totalPages = Math.ceil(reversed.length / 100) || 1;
+       
+       if (page < 1) page = 1;
+       if (page > totalPages) page = totalPages;
+       window.currentSetoranPage = page;
+       
+       const start = (page - 1) * 100;
+       const sliced = reversed.slice(start, start + 100);
+       
+       let html = '';
+       for(let i=0; i<sliced.length; i++) {
+           let t = sliced[i];
+           html += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-[11px] text-gray-500 whitespace-normal">' + (t.waktu || t.tanggal || '-') + '</td><td class="px-4 py-3 text-sm"><div class="font-bold text-gray-800">' + (mapPdg[t.id_pedagang] || t.nama_pedagang) + '</div><div class="text-[10px] tracking-wider uppercase font-bold text-indigo-600 mt-0.5">' + t.jenis + '</div></td><td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ' + parseInt(t.nominal||0).toLocaleString('id-ID') + '</td></tr>';
+       }
+       document.getElementById('table-setoran').innerHTML = html || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada riwayat setoran.</td></tr>';
+       
+       let pInfo = document.getElementById('page-info-set');
+       let bPrev = document.getElementById('btn-prev-set');
+       let bNext = document.getElementById('btn-next-set');
+       if(pInfo) pInfo.innerText = `Hal ${page} dari ${totalPages}`;
+       if(bPrev) { bPrev.disabled = (page === 1); bPrev.className = (page === 1) ? "text-gray-400 font-bold px-3 py-1.5 rounded bg-gray-100 cursor-not-allowed" : "text-indigo-600 font-bold px-3 py-1.5 rounded bg-indigo-50 hover:bg-indigo-100 transition-colors"; }
+       if(bNext) { bNext.disabled = (page === totalPages); bNext.className = (page === totalPages) ? "text-gray-400 font-bold px-3 py-1.5 rounded bg-gray-100 cursor-not-allowed" : "text-indigo-600 font-bold px-3 py-1.5 rounded bg-indigo-50 hover:bg-indigo-100 transition-colors"; }
+    };
+    window.changePageSetoran = function(dir) { window.renderSetoranPage(window.currentSetoranPage + dir); };
+
     async function renderLaporanGlobal() {
       document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div></div>';
 
@@ -1172,27 +1239,37 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
           <div>
             <h3 class="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-3">Riwayat Transaksi Jajan</h3>
-            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-               <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm flex flex-col">
+               <div class="overflow-x-auto h-[400px] overflow-y-auto">
                  <table class="w-full text-left whitespace-nowrap">
-                   <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px] font-bold sticky top-0">
+                   <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px] font-bold sticky top-0 z-10">
                      <tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Santri & Toko</th><th class="px-4 py-3 text-right">Nominal</th></tr>
                    </thead>
                    <tbody id="table-riwayat" class="divide-y divide-gray-100"><tr><td colspan="3" class="px-4 py-6 text-center">Memuat...</td></tr></tbody>
                  </table>
                </div>
+               <div class="flex justify-between items-center p-3 border-t bg-gray-50 text-sm">
+                  <button id="btn-prev-trx" onclick="changePageTrx(-1)" class="px-3 py-1.5 font-bold rounded">← Mundur</button>
+                  <span id="page-info-trx" class="font-bold text-gray-500 text-xs uppercase tracking-wider">Hal 1 dari 1</span>
+                  <button id="btn-next-trx" onclick="changePageTrx(1)" class="px-3 py-1.5 font-bold rounded">Maju →</button>
+               </div>
             </div>
           </div>
           <div>
             <h3 class="text-xl font-bold mb-4 border-l-4 border-indigo-500 pl-3">Riwayat Setoran (Tunai)</h3>
-            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-               <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm flex flex-col">
+               <div class="overflow-x-auto h-[400px] overflow-y-auto">
                  <table class="w-full text-left whitespace-nowrap">
-                   <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px] font-bold sticky top-0">
+                   <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px] font-bold sticky top-0 z-10">
                      <tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Pedagang & Jenis</th><th class="px-4 py-3 text-right">Nominal</th></tr>
                    </thead>
                    <tbody id="table-setoran" class="divide-y divide-gray-100"><tr><td colspan="3" class="px-4 py-6 text-center">Memuat...</td></tr></tbody>
                  </table>
+               </div>
+               <div class="flex justify-between items-center p-3 border-t bg-gray-50 text-sm">
+                  <button id="btn-prev-set" onclick="changePageSetoran(-1)" class="px-3 py-1.5 font-bold rounded">← Mundur</button>
+                  <span id="page-info-set" class="font-bold text-gray-500 text-xs uppercase tracking-wider">Hal 1 dari 1</span>
+                  <button id="btn-next-set" onclick="changePageSetoran(1)" class="px-3 py-1.5 font-bold rounded">Maju →</button>
                </div>
             </div>
           </div>
@@ -1200,24 +1277,13 @@
       `;
       document.getElementById('main-content').innerHTML = html;
       
-      const mapSantri = {}; if (santriData) santriData.forEach(s => mapSantri[s.id_santri] = s.nama);
       const mapPdg = {}; if (pdgData) pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
 
       if (santriData && trxData) {
          let sumBeredar = 0; santriData.forEach(function(x){ sumBeredar += parseInt(x.saldo||0); });
          let sumTrx = 0; trxData.forEach(function(x){ sumTrx += parseInt(x.nominal||0); });
-         
          document.getElementById('card-beredar').innerHTML = 'Rp ' + sumBeredar.toLocaleString('id-ID');
          document.getElementById('card-trx').innerHTML = 'Rp ' + sumTrx.toLocaleString('id-ID');
-         
-         // Menampilkan 100 transaksi jajan terbaru
-         const recentTrx = [].concat(trxData).reverse().slice(0, 100); 
-         let trxHTML = '';
-         for(let i=0; i<recentTrx.length; i++) {
-             let t = recentTrx[i];
-             trxHTML += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-[11px] text-gray-500 whitespace-normal">' + (t.waktu || t.tanggal || '-') + '</td><td class="px-4 py-3 text-sm"><div class="font-bold text-blue-700">' + (mapSantri[t.id_santri]||t.id_santri) + '</div><div class="text-xs text-emerald-600 font-semibold">➔ ' + (mapPdg[t.id_pedagang]||t.id_pedagang) + '</div></td><td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ' + parseInt(t.nominal||0).toLocaleString('id-ID') + '</td></tr>';
-         }
-         document.getElementById('table-riwayat').innerHTML = trxHTML || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada transaksi jajan.</td></tr>';
       }
 
       if (setoranData) {
@@ -1243,16 +1309,11 @@
              rHtml += '<tr class="hover:bg-emerald-50/50"><td class="px-4 py-3 font-mono text-sm">' + id + '</td><td class="px-4 py-3 font-bold">' + data.nama + '</td><td class="px-4 py-3 text-right text-indigo-700">Rp ' + data.shodaqoh.toLocaleString('id-ID') + '</td><td class="px-4 py-3 text-right text-purple-700">Rp ' + data.sewa.toLocaleString('id-ID') + '</td><td class="px-4 py-3 text-right font-extrabold text-emerald-700 bg-emerald-50/30">Rp ' + (data.shodaqoh+data.sewa).toLocaleString('id-ID') + '</td></tr>';
          }
          document.getElementById('table-rekap-pedagang').innerHTML = rHtml || '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Belum ada data setoran.</td></tr>';
-
-         // Menampilkan 100 riwayat setoran terbaru
-         const recentSet = [].concat(setoranData).reverse().slice(0, 100);
-         let setHTML = '';
-         for(let i=0; i<recentSet.length; i++) {
-             let t = recentSet[i];
-             setHTML += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-[11px] text-gray-500 whitespace-normal">' + (t.waktu || t.tanggal || '-') + '</td><td class="px-4 py-3 text-sm"><div class="font-bold text-gray-800">' + (mapPdg[t.id_pedagang] || t.nama_pedagang) + '</div><div class="text-[10px] tracking-wider uppercase font-bold text-indigo-600 mt-0.5">' + t.jenis + '</div></td><td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ' + parseInt(t.nominal||0).toLocaleString('id-ID') + '</td></tr>';
-         }
-         document.getElementById('table-setoran').innerHTML = setHTML || '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada riwayat setoran.</td></tr>';
       }
+
+      // Panggil Paginasi Halaman 1 secara otomatis saat pertama kali dibuka
+      window.renderTrxPage(1);
+      window.renderSetoranPage(1);
     }
 
     window.exportLaporanCSV = function() {
