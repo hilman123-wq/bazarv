@@ -1626,8 +1626,7 @@
 
     async function cekSantri() {
       const q = document.getElementById('t-id').value.trim(); if(!q) return;
-      const b = document.getElementById('t-info-box');
-      b.classList.remove('hidden'); b.innerHTML = 'Mencari...';
+      const b = document.getElementById('t-info-box'); b.classList.remove('hidden'); b.innerHTML = '<div class="text-center p-4 font-bold text-gray-500">Mencari Data...</div>';
       const d = await getTableData('Santri');
       if(d) {
         let s = null;
@@ -1636,15 +1635,13 @@
         }
         if(s) {
            document.getElementById('t-id').value = s.id_santri;
-           b.className = 'mt-3 p-4 rounded-xl border bg-green-50 border-green-300';
+           b.className = 'mt-4 p-6 rounded-3xl border-2 bg-gradient-to-b from-blue-50 to-blue-100 border-blue-300 shadow-lg text-center transition-all';
            let imgUrl = formatFotoUrl(s.foto, s.nama);
-           b.innerHTML = '<div class="flex items-center gap-4"><img src="' + imgUrl + '" class="w-14 h-14 rounded-full object-cover border-2 border-green-400 shadow-sm"><div class="flex-1"><div class="font-bold text-green-800 text-lg">✅ ' + s.nama + '</div><div class="text-sm font-semibold text-green-700">Saldo Awal: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</div></div></div>';
-           
-           // Otomatis Pindahkan Kursor ke Pengisian Uang
+           b.innerHTML = '<img src="' + imgUrl + '" class="w-32 h-32 mx-auto rounded-full object-cover border-4 border-white shadow-xl mb-4"><div class="text-2xl font-black text-gray-800 mb-1 flex justify-center items-center gap-2"><span class="text-blue-600 text-3xl">✅</span> ' + s.nama + '</div><div class="inline-block bg-white px-6 py-3 rounded-2xl shadow-sm border border-blue-200 mt-3"><p class="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-1">Saldo Saat Ini</p><p class="text-4xl font-black text-blue-600">Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</p></div>';
            document.getElementById('t-nom').focus();
         } else { 
-           b.className = 'mt-3 p-4 rounded-xl border bg-red-50 border-red-200'; 
-           b.innerHTML = '❌ Tidak ditemukan!'; 
+           b.className = 'mt-4 p-5 rounded-2xl border-2 bg-red-50 border-red-200 text-center'; 
+           b.innerHTML = '<div class="text-red-600 font-bold text-xl">❌ Tidak ditemukan!</div>'; 
         }
       }
     }
@@ -1711,7 +1708,7 @@
 
     async function cekSantriBayar() {
       const q = document.getElementById('b-id').value.trim(); if(!q) return;
-      const b = document.getElementById('b-info-box'); b.classList.remove('hidden'); b.innerHTML = 'Mencari...';
+      const b = document.getElementById('b-info-box'); b.classList.remove('hidden'); b.innerHTML = '<div class="text-center p-4 font-bold text-gray-500">Mencari Data...</div>';
       const d = await getTableData('Santri');
       if(d) {
         let s = null;
@@ -1720,11 +1717,14 @@
         }
         if(s) {
            document.getElementById('b-id').value = s.id_santri;
-           b.className = 'mt-3 p-3 rounded-xl border bg-green-50 border-green-200';
+           b.className = 'mt-4 p-6 rounded-3xl border-2 bg-gradient-to-b from-indigo-50 to-indigo-100 border-indigo-300 shadow-lg text-center transition-all';
            let imgUrl = formatFotoUrl(s.foto, s.nama);
-           b.innerHTML = '<div class="flex items-center gap-4"><img src="' + imgUrl + '" class="w-14 h-14 rounded-full object-cover border-2 border-green-300 shadow-sm"><div class="flex-1"><div class="font-bold text-green-800 text-lg">✅ ' + s.nama + '</div><div class="text-sm font-medium text-green-700">Sisa Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</div></div></div>';
+           b.innerHTML = '<img src="' + imgUrl + '" class="w-32 h-32 mx-auto rounded-full object-cover border-4 border-white shadow-xl mb-4"><div class="text-2xl font-black text-gray-800 mb-1 flex justify-center items-center gap-2"><span class="text-indigo-600 text-3xl">✅</span> ' + s.nama + '</div><div class="inline-block bg-white px-6 py-3 rounded-2xl shadow-sm border border-indigo-200 mt-3"><p class="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-1">Sisa Saldo</p><p class="text-4xl font-black text-indigo-600">Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</p></div>';
            document.getElementById('b-nom').focus();
-        } else { b.className = 'mt-3 p-3 rounded-xl border bg-red-50 border-red-100'; b.innerHTML = '❌ Tidak ditemukan!'; }
+        } else { 
+           b.className = 'mt-4 p-5 rounded-2xl border-2 bg-red-50 border-red-100 text-center'; 
+           b.innerHTML = '<div class="text-red-600 font-bold text-xl">❌ Tidak ditemukan!</div>'; 
+        }
       }
     }
 
@@ -1806,7 +1806,7 @@
 
     async function cekSantriPedagang() {
       const q = document.getElementById('j-id').value.trim(); if(!q) return;
-      const b = document.getElementById('j-info-box'); b.classList.remove('hidden'); b.innerHTML = 'Mencari...';
+      const b = document.getElementById('j-info-box'); b.classList.remove('hidden'); b.innerHTML = '<div class="text-center p-4 font-bold text-gray-500">Mencari Data...</div>';
       const d = await getTableData('Santri');
       if(d) {
         let s = null;
@@ -1815,11 +1815,14 @@
         }
         if(s) {
            document.getElementById('j-id').value = s.id_santri;
-           b.className = 'mt-3 p-3 rounded-xl border bg-green-50 border-green-200';
+           b.className = 'mt-4 p-6 rounded-3xl border-2 bg-gradient-to-b from-green-50 to-emerald-100 border-emerald-300 shadow-lg text-center transition-all';
            let imgUrl = formatFotoUrl(s.foto, s.nama);
-           b.innerHTML = '<div class="flex items-center gap-4"><img src="' + imgUrl + '" class="w-14 h-14 rounded-full object-cover border-2 border-green-300 shadow-sm"><div class="flex-1"><div class="font-bold text-green-800 text-lg">✅ ' + s.nama + '</div><div class="text-sm font-medium text-green-700">Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</div></div></div>';
+           b.innerHTML = '<img src="' + imgUrl + '" class="w-32 h-32 mx-auto rounded-full object-cover border-4 border-white shadow-xl mb-4"><div class="text-2xl font-black text-gray-800 mb-1 flex justify-center items-center gap-2"><span class="text-emerald-600 text-3xl">✅</span> ' + s.nama + '</div><div class="inline-block bg-white px-6 py-3 rounded-2xl shadow-sm border border-emerald-200 mt-3"><p class="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-1">Sisa Saldo</p><p class="text-4xl font-black text-emerald-600">Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</p></div>';
            document.getElementById('j-nom').focus();
-        } else { b.className = 'mt-3 p-3 rounded-xl border bg-red-50 border-red-100 text-red-600 font-bold'; b.innerHTML = '❌ Tidak ditemukan!'; }
+        } else { 
+           b.className = 'mt-4 p-5 rounded-2xl border-2 bg-red-50 border-red-200 text-center'; 
+           b.innerHTML = '<div class="text-red-600 font-bold text-xl">❌ Santri tidak ditemukan!</div>'; 
+        }
       }
     }
 
@@ -2022,7 +2025,7 @@
       `;
       document.getElementById('main-content').innerHTML = html;
     }
-    
+
     // ==========================================
     // MESIN DOWNLOAD GAMBAR ID CARD
     // ==========================================
