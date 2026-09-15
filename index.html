@@ -114,9 +114,18 @@
         
         switch(action) {
           case 'login':
-            res = await supabaseClient.from('users').select('*').eq('username', payload.username).eq('password', payload.password).single();
-            if(res.error || !res.data) throw new Error("Username atau Password salah!");
-            if(!silent) hideLoading(); return res.data;
+         // Hapus .single() agar tidak crash jika ada akun duplikat
+         res = await supabaseClient.from('users').select('*').eq('username', payload.username).eq('password', payload.password);
+
+         // Tangkap dan tampilkan error aslinya jika server 404/mati
+         if(res.error) throw new Error("Error Database: " + res.error.message);
+
+         // Cek apakah data benar-benar kosong
+         if(!res.data || res.data.length === 0) throw new Error("Username atau Password salah!");
+
+         // Ambil data pertama yang cocok (meskipun ada duplikat)
+         if(!silent) hideLoading(); 
+         return res.data[0];
 
           case 'get_data':
             res = await supabaseClient.from(payload.table.toLowerCase()).select('*');
