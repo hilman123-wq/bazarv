@@ -785,49 +785,61 @@
       let imgUrl = formatFotoUrl(santri.foto, santri.nama);
 
       const html = `
-        <div class="flex flex-col items-center py-2 print:py-0 w-full">
-           <div class="bg-white border border-gray-200 rounded-3xl p-6 shadow-2xl w-full max-w-sm flex flex-col items-center text-center relative overflow-hidden">
-              <!-- Header Biru -->
-              <div class="absolute top-0 left-0 w-full h-24 bg-blue-700"></div>
-              <div class="relative z-10 text-white mb-6 w-full">
-                  <h3 class="text-base font-extrabold uppercase tracking-widest mt-2">Kartu Santri</h3>
-                  <p class="text-xs font-semibold opacity-90">Ponpes Al-Islam</p>
+        <div class="flex flex-col items-center py-2 w-full">
+           
+           <!-- KONTINER ID CARD (Ukuran Standar Internasional ~54x86 mm) -->
+           <div id="id-card-render" class="bg-white rounded-xl shadow-2xl relative overflow-hidden flex flex-col items-center" style="width: 250px; height: 395px; border: 1px solid #e5e7eb;">
+              
+              <!-- Header Biru Lengkung -->
+              <div class="w-full h-24 bg-gradient-to-b from-blue-700 to-blue-600 rounded-b-[25%] flex flex-col items-center justify-start pt-3 relative z-0">
+                  <h3 class="text-[12px] font-extrabold uppercase tracking-widest text-white mt-1">Kartu Santri</h3>
+                  <p class="text-[9px] font-semibold text-blue-100">Ponpes Al-Islam</p>
               </div>
               
-              <!-- Foto Diperbesar -->
-              <div class="relative z-10 mb-4 mt-2">
-                  <img src="${imgUrl}" class="w-32 h-32 rounded-full mx-auto object-cover border-4 border-white shadow-lg bg-white">
+              <!-- Foto Profil -->
+              <div class="relative z-10 -mt-10 mb-2">
+                  <img src="${imgUrl}" crossorigin="anonymous" class="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md bg-white">
               </div>
               
-              <!-- Nama & Info -->
-              <h4 class="text-2xl font-bold text-gray-900 leading-tight mb-3">${santri.nama}</h4>
-              <p class="text-gray-600 mb-6 font-mono text-sm font-bold bg-gray-100 inline-block px-5 py-2 rounded-full border border-gray-200 shadow-sm">
-                  ${santri.id_santri} &bull; ${santri.rayon || 'Pondok'}
-              </p>
-              
-              <!-- QR Code Besar & Rata Tengah -->
-              <div class="bg-white p-4 rounded-2xl mb-2 border-2 border-dashed border-gray-300 shadow-sm flex items-center justify-center w-fit mx-auto">
-                  <div id="qr-container" class="w-[200px] h-[200px] flex items-center justify-center"></div>
+              <!-- Informasi Nama & ID -->
+              <div class="text-center px-3 w-full flex-1">
+                  <h4 class="text-lg font-bold text-gray-900 leading-tight truncate w-full px-2">${santri.nama}</h4>
+                  <p class="text-gray-500 font-mono text-[10px] font-bold mt-1 bg-gray-100 inline-block px-3 py-1 rounded-full border border-gray-200">
+                      ${santri.id_santri} &bull; ${santri.rayon || 'Pondok'}
+                  </p>
               </div>
               
-              <p class="text-[11px] font-bold text-gray-400 mt-3 uppercase tracking-widest">Pindai QR Untuk Transaksi</p>
+              <!-- QR Code Rata Tengah -->
+              <div class="mb-3 bg-white p-2 rounded-xl border border-gray-200 shadow-sm flex items-center justify-center">
+                  <div id="qr-container" class="w-[120px] h-[120px] flex items-center justify-center"></div>
+              </div>
+              
+              <!-- Footer ID Card -->
+              <div class="w-full bg-blue-50 py-2 text-center border-t border-blue-100 mt-auto">
+                  <p class="text-[8px] font-bold text-blue-600 uppercase tracking-widest">Pindai QR Untuk Transaksi</p>
+              </div>
            </div>
            
-           <!-- Tombol Cetak -->
-           <button onclick="window.print()" class="mt-6 w-full max-w-sm bg-blue-600 hover:bg-blue-700 transition-colors text-white font-bold py-4 rounded-xl shadow-lg print:hidden flex justify-center items-center gap-2">
-              <span class="text-xl">🖨️</span> Cetak Kartu Santri
-           </button>
+           <!-- Tombol Aksi (Download & Cetak) -->
+           <div class="mt-6 w-full max-w-sm flex gap-3 print:hidden">
+              <button onclick="downloadIDCard('${santri.nama}')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 transition-colors text-white font-bold py-3.5 rounded-xl shadow-lg flex justify-center items-center gap-2">
+                 <span class="text-xl">⬇️</span> Download
+              </button>
+              <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 transition-colors text-white font-bold py-3.5 rounded-xl shadow-lg flex justify-center items-center gap-2">
+                 <span class="text-xl">🖨️</span> Cetak
+              </button>
+           </div>
         </div>
       `;
       
-      openModal('Cetak ID Card', html);
+      openModal('ID Card Santri', html);
       
-      // Setting QR Code diperbesar menjadi 200x200
+      // Membuat QR Code
       setTimeout(function() { 
           new QRCode(document.getElementById("qr-container"), { 
               text: santri.id_santri, 
-              width: 200, 
-              height: 200, 
+              width: 120, 
+              height: 120, 
               colorDark: "#1e3a8a", 
               colorLight: "#ffffff", 
               correctLevel: QRCode.CorrectLevel.H 
