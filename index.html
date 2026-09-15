@@ -327,26 +327,194 @@
     }
 
     // ==========================================
-    // DASHBOARD ADMIN & BENDAHARA
+    // DASHBOARD ADMIN (DESAIN MODERN BARU)
     // ==========================================
     async function renderDashboardAdmin() {
       document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div></div>';
-      const [santri, pedagang, kehadiran] = await Promise.all([ getTableData('Santri'), getTableData('Pedagang'), getTableData('Kehadiran') ]);
+      
+      // Tarik Data Bersamaan
+      const [santri, pedagang, kehadiran, trx, keg] = await Promise.all([ 
+          getTableData('Santri'), 
+          getTableData('Pedagang'), 
+          getTableData('Kehadiran'),
+          getTableData('Transaksi'),
+          getTableData('Pembayaran_Kegiatan')
+      ]);
       
       const totalSantri = santri ? santri.length : 0;
       const totalPedagang = pedagang ? pedagang.length : 0;
-      const pedagangAktif = pedagang ? pedagang.filter(function(p) { return p.status_aktif !== 'Libur'; }).length : 0;
+      let pedagangAktif = 0;
+      if(pedagang) {
+          for(let i=0; i<pedagang.length; i++) { if(pedagang[i].status_aktif !== 'Libur') pedagangAktif++; }
+      }
+      
       const hariIni = new Date().toLocaleDateString('id-ID');
-      const hadirHariIni = kehadiran ? kehadiran.filter(function(a) { return (a.waktu || a.tanggal || '').includes(hariIni); }).length : 0;
+      let hadirHariIni = 0;
+      if(kehadiran) {
+          for(let i=0; i<kehadiran.length; i++) { if((kehadiran[i].waktu || kehadiran[i].tanggal || '').includes(hariIni)) hadirHariIni++; }
+      }
+      
+      let trxHariIni = 0;
+      let kegHariIni = 0;
+      
+      // Ambil 6 Aktivitas Terbaru untuk Feed
+      let aktivitas = [];
+      if(trx) {
+          for(let i=0; i<trx.length; i++) { if((trx[i].tanggal || '').includes(hariIni)) trxHariIni++; }
+          let recentTrx = [].concat(trx).reverse().slice(0, 6);
+          for(let i=0; i<recentTrx.length; i++) {
+              aktivitas.push({ waktu: recentTrx[i].tanggal, teks: 'Santri Jajan di ' + recentTrx[i].id_pedagang, nominal: recentTrx[i].nominal, tipe: 'jajan' });
+          }
+      }
+      if(keg) {
+          for(let i=0; i<keg.length; i++) { if((keg[i].waktu || keg[i].tanggal || '').includes(hariIni)) kegHariIni++; }
+          let recentKeg = [].concat(keg).reverse().slice(0, 6);
+          for(let i=0; i<recentKeg.length; i++) {
+              aktivitas.push({ waktu: (recentKeg[i].waktu || recentKeg[i].tanggal), teks: 'Pemotongan ' + recentKeg[i].kegiatan, nominal: recentKeg[i].nominal, tipe: 'kegiatan' });
+          }
+      }
 
       document.getElementById('main-content').innerHTML = `
-        <h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-2">Selamat Datang, Admin! 👋</h2>
-        <p class="text-gray-500 mb-8">Ringkasan aktivitas operasional Uang Digital Pondok hari ini.</p>
+        <!-- Banner Welcome Modern -->
+        <div class="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 rounded-3xl p-8 shadow-xl text-white mb-8 relative overflow-hidden">
+           <div class="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+              <div>
+                 <h2 class="text-4xl font-extrabold mb-2">Halo, Admin! 👋</h2>
+                 <p class="text-blue-100 text-lg">Berikut adalah ringkasan operasional Sistem Uang Digital hari ini.</p>
+              </div>
+              <div class="bg-white/20 backdrop-blur-sm p-4 rounded-2xl border border-white/30 text-center min-w-[150px] shadow-lg">
+                 <p class="text-xs uppercase font-bold text-blue-100 tracking-wider mb-1">Tanggal Hari Ini</p>
+                 <p class="text-xl font-bold">${hariIni}</p>
+              </div>
+           </div>
+           <!-- Ornamen Latar -->
+           <div class="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl"></div>
+           <div class="absolute bottom-0 left-20 w-40 h-40 bg-blue-400 opacity-20 rounded-full blur-2xl"></div>
+        </div>
+        
+        <!-- Grid Kartu Statistik 3D -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-           <div class="bg-white p-6 rounded-2xl shadow-sm border border-l-4 border-l-blue-500"><div class="flex justify-between"><div><p class="text-sm font-bold text-gray-500 uppercase mb-1">Total Santri</p><h3 class="text-3xl font-extrabold text-gray-800">${totalSantri}</h3></div><div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-2xl">👨‍🎓</div></div></div>
-           <div class="bg-white p-6 rounded-2xl shadow-sm border border-l-4 border-l-emerald-500"><div class="flex justify-between"><div><p class="text-sm font-bold text-gray-500 uppercase mb-1">Kemitraan</p><h3 class="text-3xl font-extrabold text-gray-800">${totalPedagang}</h3></div><div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-2xl">🏪</div></div></div>
-           <div class="bg-white p-6 rounded-2xl shadow-sm border border-l-4 border-l-orange-500"><div class="flex justify-between"><div><p class="text-sm font-bold text-gray-500 uppercase mb-1">Jadwal Aktif</p><h3 class="text-3xl font-extrabold text-gray-800">${pedagangAktif}</h3></div><div class="w-12 h-12 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center text-2xl">📅</div></div></div>
-           <div class="bg-white p-6 rounded-2xl shadow-sm border border-l-4 border-l-purple-500"><div class="flex justify-between"><div><p class="text-sm font-bold text-gray-500 uppercase mb-1">Kehadiran</p><h3 class="text-3xl font-extrabold text-gray-800">${hadirHariIni}</h3></div><div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-2xl">📸</div></div></div>
+           <!-- Kartu 1 -->
+           <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-lg transition-shadow relative overflow-hidden group">
+             <div class="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-full -z-10 group-hover:scale-125 transition-transform duration-500"></div>
+             <div class="flex justify-between items-start mb-4">
+               <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">👨‍🎓</div>
+               <span class="bg-blue-50 text-blue-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">Total</span>
+             </div>
+             <div><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Santri Terdaftar</p><h3 class="text-4xl font-black text-gray-800 mt-1">${totalSantri}</h3></div>
+           </div>
+           
+           <!-- Kartu 2 -->
+           <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-lg transition-shadow relative overflow-hidden group">
+             <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-full -z-10 group-hover:scale-125 transition-transform duration-500"></div>
+             <div class="flex justify-between items-start mb-4">
+               <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">🏪</div>
+               <span class="bg-emerald-50 text-emerald-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">${pedagangAktif} Toko</span>
+             </div>
+             <div><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Mitra Pedagang Aktif</p><h3 class="text-4xl font-black text-gray-800 mt-1">${totalPedagang}</h3></div>
+           </div>
+           
+           <!-- Kartu 3 -->
+           <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-lg transition-shadow relative overflow-hidden group">
+             <div class="absolute top-0 right-0 w-24 h-24 bg-orange-50 rounded-bl-full -z-10 group-hover:scale-125 transition-transform duration-500"></div>
+             <div class="flex justify-between items-start mb-4">
+               <div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">📸</div>
+               <span class="bg-orange-50 text-orange-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">Hari Ini</span>
+             </div>
+             <div><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Kehadiran Bazar</p><h3 class="text-4xl font-black text-gray-800 mt-1">${hadirHariIni}</h3></div>
+           </div>
+
+           <!-- Kartu 4 -->
+           <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-lg transition-shadow relative overflow-hidden group">
+             <div class="absolute top-0 right-0 w-24 h-24 bg-purple-50 rounded-bl-full -z-10 group-hover:scale-125 transition-transform duration-500"></div>
+             <div class="flex justify-between items-start mb-4">
+               <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">⚡</div>
+               <span class="bg-purple-50 text-purple-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">Hari Ini</span>
+             </div>
+             <div><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Total Trx Santri</p><h3 class="text-4xl font-black text-gray-800 mt-1">${trxHariIni + kegHariIni}</h3></div>
+           </div>
+        </div>
+
+        <!-- Kolom Bawah: Shortcut & Feed Aktivitas -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+           
+           <!-- Kiri: Akses Cepat & Status -->
+           <div class="lg:col-span-1 space-y-6">
+              <!-- Kotak Shortcut -->
+              <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+                 <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">🚀 Akses Cepat</h3>
+                 <div class="grid grid-cols-2 gap-3">
+                    <button onclick="RoleMenus.admin[2].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-blue-50 rounded-2xl transition-colors border border-gray-100 hover:border-blue-200 group">
+                       <span class="text-2xl mb-2 group-hover:scale-110 transition-transform">👨‍🎓</span>
+                       <span class="text-xs font-bold text-gray-600 group-hover:text-blue-700">Data Santri</span>
+                    </button>
+                    <button onclick="RoleMenus.admin[1].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-emerald-50 rounded-2xl transition-colors border border-gray-100 hover:border-emerald-200 group">
+                       <span class="text-2xl mb-2 group-hover:scale-110 transition-transform">📅</span>
+                       <span class="text-xs font-bold text-gray-600 group-hover:text-emerald-700">Atur Jadwal</span>
+                    </button>
+                    <button onclick="RoleMenus.admin[5].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-purple-50 rounded-2xl transition-colors border border-gray-100 hover:border-purple-200 group">
+                       <span class="text-2xl mb-2 group-hover:scale-110 transition-transform">📊</span>
+                       <span class="text-xs font-bold text-gray-600 group-hover:text-purple-700">Laporan Bazar</span>
+                    </button>
+                    <button onclick="RoleMenus.admin[6].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-indigo-50 rounded-2xl transition-colors border border-gray-100 hover:border-indigo-200 group">
+                       <span class="text-2xl mb-2 group-hover:scale-110 transition-transform">📝</span>
+                       <span class="text-xs font-bold text-gray-600 group-hover:text-indigo-700">Lap. Kegiatan</span>
+                    </button>
+                 </div>
+              </div>
+              
+              <!-- Kotak Status Sistem -->
+              <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 shadow-md text-white relative overflow-hidden">
+                 <div class="relative z-10">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Status Layanan</h3>
+                    <div class="flex items-center gap-3 mb-3">
+                       <div class="w-3 h-3 bg-green-400 rounded-full shadow-[0_0_10px_#4ade80] animate-pulse"></div>
+                       <p class="text-sm font-medium">Database (Google Sheet) Online</p>
+                    </div>
+                    <div class="flex items-center gap-3 mb-5">
+                       <div class="w-3 h-3 bg-blue-400 rounded-full shadow-[0_0_10px_#60a5fa]"></div>
+                       <p class="text-sm font-medium">Server Frontend Aktif</p>
+                    </div>
+                    <button onclick="refreshAppData()" class="w-full bg-white/10 hover:bg-white/20 py-3 rounded-xl text-sm font-bold transition-colors">Segarkan Dashboard</button>
+                 </div>
+              </div>
+           </div>
+
+           <!-- Kanan: Feed Aktivitas -->
+           <div class="lg:col-span-2">
+              <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                 <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">🔥 Pantauan Aktivitas Terkini</h3>
+                    <span class="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Real-time</span>
+                 </div>
+                 
+                 <div class="space-y-4 flex-1">
+                    ${aktivitas.length > 0 ? aktivitas.slice(0, 6).map(a => `
+                       <div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:shadow-md transition-all group">
+                          <div class="flex items-center gap-4">
+                             <div class="w-12 h-12 ${a.tipe === 'jajan' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'} rounded-xl flex items-center justify-center text-xl shadow-sm group-hover:scale-110 transition-transform">
+                                ${a.tipe === 'jajan' ? '🛒' : '📋'}
+                             </div>
+                             <div>
+                                <p class="font-bold text-gray-800 text-sm md:text-base">${a.teks}</p>
+                                <p class="text-xs text-gray-500 font-mono mt-0.5">${a.waktu || '-'}</p>
+                             </div>
+                          </div>
+                          <div class="text-right">
+                             <p class="font-bold font-mono text-gray-800 text-sm md:text-base">Rp ${parseInt(a.nominal||0).toLocaleString('id-ID')}</p>
+                             <p class="text-[10px] font-bold uppercase tracking-wider ${a.tipe === 'jajan' ? 'text-emerald-600' : 'text-indigo-600'} mt-0.5">${a.tipe}</p>
+                          </div>
+                       </div>
+                    `).join('') : `
+                       <div class="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                          <div class="text-5xl mb-4">😴</div>
+                          <p class="text-gray-500 font-bold">Belum ada transaksi terekam.</p>
+                       </div>
+                    `}
+                 </div>
+              </div>
+           </div>
+
         </div>
       `;
     }
