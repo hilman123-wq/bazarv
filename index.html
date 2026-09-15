@@ -2022,6 +2022,40 @@
       `;
       document.getElementById('main-content').innerHTML = html;
     }
+    
+    // ==========================================
+    // MESIN DOWNLOAD GAMBAR ID CARD
+    // ==========================================
+    window.downloadIDCard = function(namaSantri) {
+        showToast('Sedang menyiapkan gambar, mohon tunggu...', 'info');
+        
+        // Memanggil "Kamera Layar" (html2canvas) secara otomatis
+        if (typeof html2canvas === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+            script.onload = () => eksekusiDownloadKartu(namaSantri);
+            document.head.appendChild(script);
+        } else {
+            eksekusiDownloadKartu(namaSantri);
+        }
+    };
+
+    function eksekusiDownloadKartu(namaSantri) {
+        const elemenKartu = document.getElementById('id-card-render');
+        
+        // Memotret ID Card menjadi gambar dengan resolusi 3x lebih tajam
+        html2canvas(elemenKartu, { scale: 3, useCORS: true, backgroundColor: '#ffffff' }).then(canvas => {
+            const namaFile = 'ID_Card_' + namaSantri.replace(/[^a-zA-Z0-9]/g, '_') + '.png';
+            const link = document.createElement('a');
+            link.download = namaFile;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            showToast('ID Card berhasil didownload! ✅');
+        }).catch(err => {
+            console.error(err);
+            showToast('Gagal mendownload gambar. Silakan gunakan fitur cetak.', 'error');
+        });
+    }
 
   </script>
 </body>
