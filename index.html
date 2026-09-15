@@ -46,14 +46,13 @@
     }
 
     document.addEventListener("DOMContentLoaded", function() {
-      const supaUrl = localStorage.getItem('SUPA_URL');
-      const supaKey = localStorage.getItem('SUPA_KEY');
-      if(!supaUrl || !supaKey) { 
-          renderSetupAPI(); 
-      } else { 
-          initSupabase(supaUrl, supaKey);
-          renderLogin(); 
-      }
+      // 1. Masukkan URL dan API Key asli Anda di dalam tanda kutip ini:
+      const supaUrl = 'https://xxxxxxxxx.supabase.co'; 
+      const supaKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; 
+
+      // 2. Langsung koneksikan dan buka halaman Login
+      initSupabase(supaUrl, supaKey);
+      renderLogin(); 
     });
 
     function initSupabase(url, key) {
