@@ -1780,7 +1780,12 @@
       if (html5QrCode && html5QrCode.isScanning) { stopKamera(); return; }
       con.classList.remove('hidden'); btn.innerHTML = '❌ Tutup Kamera'; btn.className = 'w-full bg-red-50 text-red-600 font-bold py-3 rounded-xl border border-red-200';
       html5QrCode = new Html5Qrcode("reader");
-      html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, function(txt) { document.getElementById('j-id').value = txt; try{navigator.vibrate(200);}catch(e){} stopKamera(); document.getElementById('j-nom').focus(); }, function(err) {}).catch(function(e) { stopKamera(); });
+      html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, function(txt) { 
+          document.getElementById('j-id').value = txt; 
+          try{navigator.vibrate(200);}catch(e){} 
+          stopKamera(); 
+          cekSantriPedagang(); // INI KUNCI AGAR DATA LANGSUNG MUNCUL
+      }, function(err) {}).catch(function(e) { stopKamera(); });
     }
 
     function stopKamera() {
