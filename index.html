@@ -3,10 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Uang Digital Al-Islam</title>
+  <title>Uang Digital Al-Islam (Supabase Edition)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <!-- SCRIPT SUPABASE -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
   <style>
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -20,18 +23,18 @@
   <div id="modal-container"></div>
   
   <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-80 flex flex-col items-center justify-center z-50 hidden transition-opacity duration-300">
-    <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600 mb-4"></div>
-    <p class="text-blue-800 font-semibold animate-pulse tracking-wide">Menyinkronkan Data...</p>
+    <div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600 mb-4"></div>
+    <p class="text-emerald-800 font-bold animate-pulse tracking-wide">Menghubungkan ke Server Kilat...</p>
   </div>
 
   <script>
     const AppState = { user: null, mySaldo: 0 };
     const AppCache = {};
+    let supabaseClient = null;
 
-    // PENGUATAN: Sistem untuk mengolah foto (Link Drive / Upload Langsung)
     function formatFotoUrl(url, nama) {
         if(!url) return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(nama || 'S') + '&background=e0f2fe&color=0369a1&size=150';
-        if(url.startsWith('data:image')) return url; // Jika hasil upload file
+        if(url.startsWith('data:image')) return url;
         let match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) { return 'https://drive.google.com/uc?export=view&id=' + match[1]; }
         return url;
@@ -42,13 +45,20 @@
       else { for (let key in AppCache) delete AppCache[key]; }
     }
 
-    let API_URL = ""; 
-
     document.addEventListener("DOMContentLoaded", function() {
-      const savedAPI = localStorage.getItem('BAZAR_API_URL');
-      if(!savedAPI) { renderSetupAPI(); } 
-      else { API_URL = savedAPI; renderLogin(); }
+      const supaUrl = localStorage.getItem('SUPA_URL');
+      const supaKey = localStorage.getItem('SUPA_KEY');
+      if(!supaUrl || !supaKey) { 
+          renderSetupAPI(); 
+      } else { 
+          initSupabase(supaUrl, supaKey);
+          renderLogin(); 
+      }
     });
+
+    function initSupabase(url, key) {
+       supabaseClient = supabase.createClient(url, key);
+    }
 
     function showLoading() { document.getElementById('loading-overlay').classList.remove('hidden'); }
     function hideLoading() { document.getElementById('loading-overlay').classList.add('hidden'); }
@@ -68,7 +78,7 @@
       const container = document.getElementById('modal-container');
       container.innerHTML = `
         <div id="dynamic-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-40 p-4 transition-opacity">
-          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-100">
+          <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-100">
             <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100">
               <h3 class="text-xl font-bold text-gray-800">${title}</h3>
               <button onclick="closeModal()" class="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors font-bold text-xl leading-none">&times;</button>
@@ -85,38 +95,178 @@
       const html = `
         <p class="mb-6 text-gray-600 text-lg">${message}</p>
         <div class="flex justify-end gap-3">
-          <button onclick="closeModal()" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors">Batal</button>
-          <button id="btn-confirm-ok" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-colors">Ya, Lanjutkan</button>
+          <button onclick="closeModal()" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors">Batal</button>
+          <button id="btn-confirm-ok" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-colors">Ya, Lanjutkan</button>
         </div>
       `;
       openModal('Konfirmasi Tindakan', html);
       document.getElementById('btn-confirm-ok').onclick = function() { closeModal(); callback(); };
     }
 
+    // =========================================================
+    // JANTUNG APLIKASI: MENGHUBUNGKAN KE SUPABASE SECARA LANGSUNG
+    // =========================================================
     async function fetchAPI(action, payload = {}, silent = false) {
       if(!silent) showLoading();
       try {
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          body: JSON.stringify({ action: action, data: payload }),
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-        });
+        if (!supabaseClient) throw new Error("Server Supabase belum terhubung!");
+        let res;
         
-        const textResponse = await res.text();
-        let json;
-        try { json = JSON.parse(textResponse); } 
-        catch (err) {
-          if(!silent) hideLoading();
-          showToast("Data dari server tidak valid.", 'error');
-          return null;
-        }
+        switch(action) {
+          case 'login':
+            res = await supabaseClient.from('users').select('*').eq('username', payload.username).eq('password', payload.password).single();
+            if(res.error || !res.data) throw new Error("Username atau Password salah!");
+            if(!silent) hideLoading(); return res.data;
 
-        if(!silent) hideLoading();
-        if(json.success) return json.data;
-        else { showToast(json.error, 'error'); return null; }
+          case 'get_data':
+            res = await supabaseClient.from(payload.table.toLowerCase()).select('*');
+            if(res.error) throw res.error;
+            let mapped = [];
+            if(res.data) {
+                mapped = res.data.map(function(r) {
+                   if(r.waktu) {
+                       let tgl = new Date(r.waktu).toLocaleString('id-ID');
+                       r.tanggal = tgl; r.waktu = tgl;
+                   }
+                   return r;
+                });
+            }
+            if(!silent) hideLoading(); return mapped;
+
+          case 'save_santri':
+            if(payload.is_new) {
+                res = await supabaseClient.from('santri').insert([{
+                    id_santri: payload.id_santri, nama: payload.nama, 
+                    rayon: payload.rayon, saldo: parseInt(payload.saldo)||0, foto: payload.foto
+                }]);
+            } else {
+                res = await supabaseClient.from('santri').update({
+                    nama: payload.nama, rayon: payload.rayon, 
+                    saldo: parseInt(payload.saldo)||0, foto: payload.foto
+                }).eq('id_santri', payload.id_santri);
+            }
+            if(res.error) throw res.error;
+            if(!silent) hideLoading(); return true;
+
+          case 'delete_santri':
+            res = await supabaseClient.from('santri').delete().eq('id_santri', payload.id);
+            if(res.error) throw res.error;
+            if(!silent) hideLoading(); return true;
+
+          case 'save_pedagang':
+            if(payload.is_new) {
+                res = await supabaseClient.from('pedagang').insert([{
+                    id_pedagang: payload.id_pedagang, nama: payload.nama, 
+                    jualan: payload.jualan, saldo: parseInt(payload.saldo)||0, status_aktif: 'Aktif'
+                }]);
+                if(res.error) throw res.error;
+                await supabaseClient.from('users').insert([{
+                    username: payload.id_pedagang, password: '123456', 
+                    role: 'pedagang', id_ref: payload.id_pedagang
+                }]);
+            } else {
+                res = await supabaseClient.from('pedagang').update({
+                    nama: payload.nama, jualan: payload.jualan, saldo: parseInt(payload.saldo)||0
+                }).eq('id_pedagang', payload.id_pedagang);
+                if(res.error) throw res.error;
+            }
+            if(!silent) hideLoading(); return true;
+
+          case 'delete_pedagang':
+            await supabaseClient.from('pedagang').delete().eq('id_pedagang', payload.id);
+            await supabaseClient.from('users').delete().eq('username', payload.id);
+            if(!silent) hideLoading(); return true;
+
+          case 'set_jadwal':
+            const allP = await supabaseClient.from('pedagang').select('id_pedagang');
+            if(allP.data) {
+                for(let i=0; i<allP.data.length; i++) {
+                    let st = payload.active_ids.includes(allP.data[i].id_pedagang) ? 'Aktif' : 'Libur';
+                    await supabaseClient.from('pedagang').update({status_aktif: st}).eq('id_pedagang', allP.data[i].id_pedagang);
+                }
+            }
+            if(!silent) hideLoading(); return true;
+
+          case 'topup':
+            let cS = await supabaseClient.from('santri').select('saldo').eq('id_santri', payload.id_santri).single();
+            if(!cS.data) throw new Error("Santri tidak ditemukan");
+            await supabaseClient.from('santri').update({saldo: cS.data.saldo + parseInt(payload.nominal)}).eq('id_santri', payload.id_santri);
+            await supabaseClient.from('topup').insert([{
+                id_topup: "TP"+Date.now(), id_santri: payload.id_santri, 
+                nominal: payload.nominal, struk: payload.struk, petugas: payload.petugas
+            }]);
+            if(!silent) hideLoading(); return true;
+
+          case 'jajan':
+            let stJ = await supabaseClient.from('santri').select('saldo').eq('id_santri', payload.id_santri).single();
+            let pdJ = await supabaseClient.from('pedagang').select('saldo, status_aktif').eq('id_pedagang', payload.id_pedagang).single();
+            if(!stJ.data) throw new Error("Santri tidak ditemukan");
+            if(!pdJ.data) throw new Error("Akses Pedagang tidak sah");
+            if(pdJ.data.status_aktif !== 'Aktif') throw new Error("Toko sedang Libur");
+            if(stJ.data.saldo < parseInt(payload.nominal)) throw new Error("Saldo santri tidak mencukupi");
+            
+            await supabaseClient.from('santri').update({saldo: stJ.data.saldo - parseInt(payload.nominal)}).eq('id_santri', payload.id_santri);
+            await supabaseClient.from('pedagang').update({saldo: pdJ.data.saldo + parseInt(payload.nominal)}).eq('id_pedagang', payload.id_pedagang);
+            await supabaseClient.from('transaksi').insert([{
+                id_trx: "TRX"+Date.now(), id_santri: payload.id_santri, 
+                id_pedagang: payload.id_pedagang, nominal: payload.nominal
+            }]);
+            if(!silent) hideLoading(); return { sisa_saldo: stJ.data.saldo - parseInt(payload.nominal) };
+
+          case 'ajukan_pencairan':
+            let pdP = await supabaseClient.from('pedagang').select('saldo').eq('id_pedagang', payload.id_pedagang).single();
+            if(!pdP.data || pdP.data.saldo < parseInt(payload.nominal)) throw new Error("Saldo toko tidak cukup");
+            await supabaseClient.from('pedagang').update({saldo: pdP.data.saldo - parseInt(payload.nominal)}).eq('id_pedagang', payload.id_pedagang);
+            await supabaseClient.from('pencairan').insert([{
+                id_pencairan: "WD"+Date.now(), id_pedagang: payload.id_pedagang, nominal: payload.nominal
+            }]);
+            if(!silent) hideLoading(); return true;
+
+          case 'approve_pencairan':
+            await supabaseClient.from('pencairan').update({status: 'Selesai'}).eq('id_pencairan', payload.id_pencairan);
+            if(!silent) hideLoading(); return true;
+
+          case 'catat_setoran':
+            await supabaseClient.from('setoran').insert([{
+                id_setoran: "SET"+Date.now(), id_pedagang: payload.id_pedagang, 
+                nama_pedagang: payload.nama_pedagang, jenis: payload.jenis, nominal: payload.nominal
+            }]);
+            if(!silent) hideLoading(); return true;
+
+          case 'catat_kehadiran':
+            let pdK = await supabaseClient.from('pedagang').select('nama').eq('id_pedagang', payload.id_pedagang).single();
+            let nmP = pdK.data ? pdK.data.nama : 'Tidak Diketahui';
+            await supabaseClient.from('kehadiran').insert([{
+                id_pedagang: payload.id_pedagang, nama_pedagang: nmP
+            }]);
+            if(!silent) hideLoading(); return { message: "Hadir", nama: nmP };
+
+          case 'bayar_kegiatan':
+            let stK = await supabaseClient.from('santri').select('saldo, nama').eq('id_santri', payload.id_santri).single();
+            if(!stK.data) throw new Error("Santri tidak ditemukan");
+            if(stK.data.saldo < parseInt(payload.nominal)) throw new Error("Saldo tidak cukup");
+            
+            await supabaseClient.from('santri').update({saldo: stK.data.saldo - parseInt(payload.nominal)}).eq('id_santri', payload.id_santri);
+            let idB = "BYR"+Date.now();
+            await supabaseClient.from('pembayaran_kegiatan').insert([{
+                id_trx: idB, id_santri: payload.id_santri, 
+                kegiatan: payload.kegiatan, nominal: payload.nominal, petugas: payload.petugas
+            }]);
+            if(!silent) hideLoading(); return { id_trx: idB, sisa_saldo: stK.data.saldo - parseInt(payload.nominal), nama: stK.data.nama };
+
+          case 'pencairan_kegiatan':
+            await supabaseClient.from('pencairan_kegiatan').insert([{
+                id_pencairan: "WDK"+Date.now(), kegiatan: payload.kegiatan, 
+                nominal: payload.nominal, petugas: payload.petugas
+            }]);
+            if(!silent) hideLoading(); return true;
+
+          default: throw new Error("Aksi "+action+" tidak tersedia");
+        }
       } catch(e) {
         if(!silent) hideLoading();
-        showToast("Gagal menyambung ke Database.", 'error');
+        console.error(e);
+        showToast(e.message || "Gagal terkoneksi ke Server Supabase", 'error');
         return null;
       }
     }
@@ -129,46 +279,60 @@
     }
 
     function renderSetupAPI() {
-      const current = localStorage.getItem('BAZAR_API_URL') || '';
+      const savedURL = localStorage.getItem('SUPA_URL') || '';
+      const savedKEY = localStorage.getItem('SUPA_KEY') || '';
       document.getElementById('app').innerHTML = `
         <div class="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-           <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg border border-gray-100">
+           <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-lg border border-gray-100">
               <div class="flex items-center mb-6">
-                <div class="bg-blue-100 p-3 rounded-full mr-4 text-blue-600 text-2xl">🔗</div>
-                <h2 class="text-2xl font-bold text-gray-800">Setup Database</h2>
+                <div class="bg-emerald-100 p-3 rounded-full mr-4 text-emerald-600 text-2xl">🚀</div>
+                <h2 class="text-2xl font-bold text-gray-800">Koneksi Supabase</h2>
               </div>
-              <p class="text-sm mb-6 text-gray-600 leading-relaxed bg-blue-50 p-4 rounded-lg">
-                Masukkan <b>URL Web App</b> Google Apps Script Anda.
+              <p class="text-sm mb-6 text-gray-600 bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+                Masukkan kunci rahasia <b>Supabase</b> Anda di bawah ini agar aplikasi berjalan sangat kilat.
               </p>
-              <input type="text" id="api-url-input" class="w-full border-2 border-gray-200 focus:border-blue-500 p-3 rounded-lg mb-6 outline-none" value="${current}">
+              <div class="space-y-4 mb-6">
+                <div>
+                  <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Project URL</label>
+                  <input type="text" id="supa-url" class="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl outline-none focus:border-emerald-500" value="${savedURL}" placeholder="https://xxxxxx.supabase.co">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-gray-500 uppercase mb-1">API Key (anon public)</label>
+                  <input type="password" id="supa-key" class="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl outline-none focus:border-emerald-500 font-mono text-sm" value="${savedKEY}" placeholder="eyJhbG...">
+                </div>
+              </div>
               <div class="flex gap-3">
-                <button onclick="saveAPIUrl()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-lg">Simpan Endpoint</button>
-                ${current ? '<button onclick="renderLogin()" class="px-6 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold p-3 rounded-lg">Batal</button>' : ''}
+                <button onclick="saveSupaConfig()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3.5 rounded-xl shadow-md transition-all">Hubungkan ke Supabase</button>
+                ${savedURL ? '<button onclick="renderLogin()" class="px-6 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold p-3 rounded-lg">Batal</button>' : ''}
               </div>
            </div>
         </div>
       `;
     }
 
-    function saveAPIUrl() {
-      const url = document.getElementById('api-url-input').value.trim();
-      if(!url.startsWith('https://script.google.com/')) return showToast('URL tidak valid!', 'error');
-      localStorage.setItem('BAZAR_API_URL', url);
-      API_URL = url;
-      showToast('Endpoint Database berhasil diamankan');
+    function saveSupaConfig() {
+      const url = document.getElementById('supa-url').value.trim();
+      const key = document.getElementById('supa-key').value.trim();
+      if(!url || !key) return showToast('Harap isi kedua kolom!', 'error');
+      
+      localStorage.setItem('SUPA_URL', url);
+      localStorage.setItem('SUPA_KEY', key);
+      
+      initSupabase(url, key);
+      showToast('Berhasil Tersambung ke Supabase! 🚀');
       renderLogin();
     }
 
     function renderLogin() {
       document.getElementById('app').innerHTML = `
-        <div class="flex min-h-screen flex-col md:flex-row bg-blue-50">
-          <div class="absolute top-4 right-4 z-10 text-blue-800 bg-white/50 px-4 py-2 rounded-full cursor-pointer font-medium hover:bg-white shadow-sm transition-all text-sm" onclick="renderSetupAPI()">⚙️ Pengaturan API</div>
+        <div class="flex min-h-screen flex-col md:flex-row bg-emerald-50">
+          <div class="absolute top-4 right-4 z-10 text-emerald-800 bg-white/50 px-4 py-2 rounded-full cursor-pointer font-medium hover:bg-white shadow-sm transition-all text-sm" onclick="renderSetupAPI()">⚙️ Pengaturan Supabase</div>
           
-          <div class="md:flex-1 bg-blue-800 text-white p-12 flex-col justify-center hidden md:flex relative overflow-hidden">
+          <div class="md:flex-1 bg-emerald-800 text-white p-12 flex-col justify-center hidden md:flex relative overflow-hidden">
              <div class="relative z-10">
                <h1 class="text-5xl font-extrabold mb-6 leading-tight">Sistem Uang Digital<br>Ponpes Al-Islam</h1>
-               <p class="text-xl text-blue-100 leading-relaxed font-light">
-                 Mengubah transaksi tunai menjadi digital menggunakan voucher QR Code. Aman, Cepat, dan Transparan.
+               <p class="text-xl text-emerald-100 leading-relaxed font-light">
+                 Versi Premium: Terhubung langsung ke Database PostgreSQL Supabase dengan kecepatan kilat milidetik.
                </p>
              </div>
           </div>
@@ -176,7 +340,7 @@
           <div class="flex-1 flex items-center justify-center p-6 bg-white relative">
              <div class="w-full max-w-sm">
                 <div class="text-center mb-8 md:hidden">
-                   <h2 class="text-3xl font-extrabold text-blue-800">Uang Digital</h2>
+                   <h2 class="text-3xl font-extrabold text-emerald-800">Uang Digital</h2>
                    <p class="text-gray-500 mt-2">Masuk ke Sistem</p>
                 </div>
                 <h3 class="text-2xl font-bold text-gray-800 mb-6 hidden md:block">Masuk ke Akun Anda</h3>
@@ -184,13 +348,13 @@
                 <form onsubmit="event.preventDefault(); doLogin(); return false;" class="space-y-5">
                   <div>
                     <label class="block text-gray-700 font-medium mb-1.5 text-sm">Username / ID Pegawai</label>
-                    <input type="text" id="val-u" class="w-full bg-gray-50 border border-gray-300 focus:border-blue-500 p-3.5 rounded-xl outline-none" required placeholder="Masukkan username">
+                    <input type="text" id="val-u" class="w-full bg-gray-50 border border-gray-300 focus:border-emerald-500 p-3.5 rounded-xl outline-none" required placeholder="Masukkan username">
                   </div>
                   <div>
                     <label class="block text-gray-700 font-medium mb-1.5 text-sm">Kata Sandi</label>
-                    <input type="password" id="val-p" class="w-full bg-gray-50 border border-gray-300 focus:border-blue-500 p-3.5 rounded-xl outline-none" required placeholder="••••••••">
+                    <input type="password" id="val-p" class="w-full bg-gray-50 border border-gray-300 focus:border-emerald-500 p-3.5 rounded-xl outline-none" required placeholder="••••••••">
                   </div>
-                  <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg mt-4">Login Sekarang</button>
+                  <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg mt-4">Login Sekarang</button>
                 </form>
              </div>
           </div>
@@ -224,7 +388,8 @@
       ],
       bendahara: [
         { id: 'dashboard_bendahara', icon: '🏠', label: 'Dashboard Utama', action: renderDashboardBendahara },
-        { id: 'pencairan_dana', icon: '💸', label: 'Pencairan Dana', action: renderApprovePencairan },
+        { id: 'pencairan_dana', icon: '💸', label: 'Pencairan Bazar', action: renderApprovePencairan },
+        { id: 'pencairan_kegiatan', icon: '🏧', label: 'Pencairan Kegiatan', action: renderPencairanKegiatan },
         { id: 'setoran_dana', icon: '📥', label: 'Setoran Pedagang', action: renderSetoran },
         { id: 'bayar_kegiatan', icon: '📋', label: 'Pembayaran Santri', action: renderBayarKegiatan },
         { id: 'laporan_bendahara', icon: '📉', label: 'Laporan Bazar', action: renderLaporanGlobal },
@@ -249,23 +414,23 @@
           <aside class="w-72 bg-gray-900 text-gray-300 flex flex-col shadow-2xl transition-transform duration-300 transform md:translate-x-0 -translate-x-full absolute md:relative z-30 h-full" id="sidebar">
             <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
               <div class="flex items-center gap-3">
-                 <div class="bg-blue-500 w-8 h-8 rounded flex items-center justify-center text-white font-bold">A</div>
+                 <div class="bg-emerald-500 w-8 h-8 rounded flex items-center justify-center text-white font-bold">S</div>
                  <span class="text-xl font-bold text-white tracking-wide">Uang Digital</span>
               </div>
               <button class="md:hidden text-gray-400 hover:text-white" onclick="toggleSidebar()">✖</button>
             </div>
             <div class="p-5 border-b border-gray-800 bg-gray-900 flex items-center gap-4">
-              <div class="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center text-xl font-bold text-blue-400 border border-blue-500/30">${usernameHurufAwal}</div>
+              <div class="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center text-xl font-bold text-emerald-400 border border-emerald-500/30">${usernameHurufAwal}</div>
               <div>
                 <p class="text-white font-semibold">${AppState.user.username}</p>
-                <p class="text-xs text-blue-500 bg-blue-500/10 inline-block px-2 py-0.5 rounded-full mt-1 border border-blue-500/20">${AppState.user.role.toUpperCase()}</p>
+                <p class="text-xs text-emerald-500 bg-emerald-500/10 inline-block px-2 py-0.5 rounded-full mt-1 border border-emerald-500/20">${AppState.user.role.toUpperCase()}</p>
               </div>
             </div>
             <div class="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Menu Navigasi</div>
             <nav class="flex-1 overflow-y-auto px-3 pb-4 space-y-1" id="sidebar-nav"></nav>
             <div class="p-4 border-t border-gray-800 space-y-2">
-               <button onclick="refreshAppData()" class="w-full flex items-center justify-center gap-2 p-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors font-medium">🔄 Segarkan Data</button>
-               <button onclick="logout()" class="w-full flex items-center justify-center gap-2 p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors font-medium">🚪 Keluar Sistem</button>
+               <button onclick="refreshAppData()" class="w-full flex items-center justify-center gap-2 p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors font-bold">🔄 Segarkan Cepat</button>
+               <button onclick="logout()" class="w-full flex items-center justify-center gap-2 p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors font-bold">🚪 Keluar Sistem</button>
             </div>
           </aside>
           
@@ -276,8 +441,8 @@
                  <span class="text-lg font-bold text-gray-800">Uang Digital</span>
               </div>
               <div class="flex items-center gap-3">
-                 <button onclick="refreshAppData()" class="text-blue-600 p-1.5 bg-blue-50 rounded-md">🔄</button>
-                 <div class="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-sm">${usernameHurufAwal}</div>
+                 <button onclick="refreshAppData()" class="text-emerald-600 p-1.5 bg-emerald-50 rounded-md">⚡</button>
+                 <div class="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold text-sm">${usernameHurufAwal}</div>
               </div>
             </header>
             <main class="flex-1 p-4 md:p-8 overflow-y-auto w-full relative" id="main-content"></main>
@@ -327,38 +492,26 @@
     }
 
     // ==========================================
-    // DASHBOARD ADMIN (DESAIN MODERN BARU)
+    // DASHBOARD ADMIN MODERN
     // ==========================================
     async function renderDashboardAdmin() {
       document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div></div>';
       
-      // Tarik Data Bersamaan
       const [santri, pedagang, kehadiran, trx, keg] = await Promise.all([ 
-          getTableData('Santri'), 
-          getTableData('Pedagang'), 
-          getTableData('Kehadiran'),
-          getTableData('Transaksi'),
-          getTableData('Pembayaran_Kegiatan')
+          getTableData('Santri'), getTableData('Pedagang'), getTableData('Kehadiran'), getTableData('Transaksi'), getTableData('Pembayaran_Kegiatan')
       ]);
       
       const totalSantri = santri ? santri.length : 0;
       const totalPedagang = pedagang ? pedagang.length : 0;
       let pedagangAktif = 0;
-      if(pedagang) {
-          for(let i=0; i<pedagang.length; i++) { if(pedagang[i].status_aktif !== 'Libur') pedagangAktif++; }
-      }
+      if(pedagang) { for(let i=0; i<pedagang.length; i++) { if(pedagang[i].status_aktif !== 'Libur') pedagangAktif++; } }
       
       const hariIni = new Date().toLocaleDateString('id-ID');
       let hadirHariIni = 0;
-      if(kehadiran) {
-          for(let i=0; i<kehadiran.length; i++) { if((kehadiran[i].waktu || kehadiran[i].tanggal || '').includes(hariIni)) hadirHariIni++; }
-      }
+      if(kehadiran) { for(let i=0; i<kehadiran.length; i++) { if((kehadiran[i].waktu || kehadiran[i].tanggal || '').includes(hariIni)) hadirHariIni++; } }
       
-      let trxHariIni = 0;
-      let kegHariIni = 0;
+      let trxHariIni = 0; let kegHariIni = 0; let aktivitas = [];
       
-      // Ambil 6 Aktivitas Terbaru untuk Feed
-      let aktivitas = [];
       if(trx) {
           for(let i=0; i<trx.length; i++) { if((trx[i].tanggal || '').includes(hariIni)) trxHariIni++; }
           let recentTrx = [].concat(trx).reverse().slice(0, 6);
@@ -374,147 +527,80 @@
           }
       }
 
+      let actHTML = '';
+      if(aktivitas.length > 0) {
+          let slicedAct = aktivitas.slice(0, 6);
+          for(let i=0; i<slicedAct.length; i++) {
+              let a = slicedAct[i];
+              let isJajan = a.tipe === 'jajan';
+              actHTML += '<div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:shadow-md transition-all group">';
+              actHTML += '<div class="flex items-center gap-4"><div class="w-12 h-12 ' + (isJajan ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600') + ' rounded-xl flex items-center justify-center text-xl shadow-sm group-hover:scale-110 transition-transform">' + (isJajan ? '🛒' : '📋') + '</div>';
+              actHTML += '<div><p class="font-bold text-gray-800 text-sm md:text-base">' + a.teks + '</p><p class="text-xs text-gray-500 font-mono mt-0.5">' + (a.waktu || '-') + '</p></div></div>';
+              actHTML += '<div class="text-right"><p class="font-bold font-mono text-gray-800 text-sm md:text-base">Rp ' + parseInt(a.nominal||0).toLocaleString('id-ID') + '</p><p class="text-[10px] font-bold uppercase tracking-wider ' + (isJajan ? 'text-emerald-600' : 'text-indigo-600') + ' mt-0.5">' + a.tipe + '</p></div>';
+              actHTML += '</div>';
+          }
+      } else {
+          actHTML = '<div class="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200"><div class="text-5xl mb-4">😴</div><p class="text-gray-500 font-bold">Belum ada transaksi terekam.</p></div>';
+      }
+
       document.getElementById('main-content').innerHTML = `
-        <!-- Banner Welcome Modern -->
         <div class="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 rounded-3xl p-8 shadow-xl text-white mb-8 relative overflow-hidden">
            <div class="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-              <div>
-                 <h2 class="text-4xl font-extrabold mb-2">Halo, Admin! 👋</h2>
-                 <p class="text-blue-100 text-lg">Berikut adalah ringkasan operasional Sistem Uang Digital hari ini.</p>
-              </div>
-              <div class="bg-white/20 backdrop-blur-sm p-4 rounded-2xl border border-white/30 text-center min-w-[150px] shadow-lg">
-                 <p class="text-xs uppercase font-bold text-blue-100 tracking-wider mb-1">Tanggal Hari Ini</p>
-                 <p class="text-xl font-bold">${hariIni}</p>
-              </div>
+              <div><h2 class="text-4xl font-extrabold mb-2">Halo, Admin! 👋</h2><p class="text-blue-100 text-lg">Berikut adalah ringkasan operasional Sistem Uang Digital hari ini.</p></div>
+              <div class="bg-white/20 backdrop-blur-sm p-4 rounded-2xl border border-white/30 text-center min-w-[150px] shadow-lg"><p class="text-xs uppercase font-bold text-blue-100 tracking-wider mb-1">Tanggal Hari Ini</p><p class="text-xl font-bold">${hariIni}</p></div>
            </div>
-           <!-- Ornamen Latar -->
-           <div class="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl"></div>
-           <div class="absolute bottom-0 left-20 w-40 h-40 bg-blue-400 opacity-20 rounded-full blur-2xl"></div>
+           <div class="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl"></div><div class="absolute bottom-0 left-20 w-40 h-40 bg-blue-400 opacity-20 rounded-full blur-2xl"></div>
         </div>
         
-        <!-- Grid Kartu Statistik 3D -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-           <!-- Kartu 1 -->
            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-lg transition-shadow relative overflow-hidden group">
              <div class="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-full -z-10 group-hover:scale-125 transition-transform duration-500"></div>
-             <div class="flex justify-between items-start mb-4">
-               <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">👨‍🎓</div>
-               <span class="bg-blue-50 text-blue-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">Total</span>
-             </div>
+             <div class="flex justify-between items-start mb-4"><div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">👨‍🎓</div><span class="bg-blue-50 text-blue-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">Total</span></div>
              <div><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Santri Terdaftar</p><h3 class="text-4xl font-black text-gray-800 mt-1">${totalSantri}</h3></div>
            </div>
-           
-           <!-- Kartu 2 -->
            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-lg transition-shadow relative overflow-hidden group">
              <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-full -z-10 group-hover:scale-125 transition-transform duration-500"></div>
-             <div class="flex justify-between items-start mb-4">
-               <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">🏪</div>
-               <span class="bg-emerald-50 text-emerald-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">${pedagangAktif} Toko</span>
-             </div>
+             <div class="flex justify-between items-start mb-4"><div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">🏪</div><span class="bg-emerald-50 text-emerald-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">${pedagangAktif} Toko</span></div>
              <div><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Mitra Pedagang Aktif</p><h3 class="text-4xl font-black text-gray-800 mt-1">${totalPedagang}</h3></div>
            </div>
-           
-           <!-- Kartu 3 -->
            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-lg transition-shadow relative overflow-hidden group">
              <div class="absolute top-0 right-0 w-24 h-24 bg-orange-50 rounded-bl-full -z-10 group-hover:scale-125 transition-transform duration-500"></div>
-             <div class="flex justify-between items-start mb-4">
-               <div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">📸</div>
-               <span class="bg-orange-50 text-orange-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">Hari Ini</span>
-             </div>
+             <div class="flex justify-between items-start mb-4"><div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">📸</div><span class="bg-orange-50 text-orange-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">Hari Ini</span></div>
              <div><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Kehadiran Bazar</p><h3 class="text-4xl font-black text-gray-800 mt-1">${hadirHariIni}</h3></div>
            </div>
-
-           <!-- Kartu 4 -->
            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-lg transition-shadow relative overflow-hidden group">
              <div class="absolute top-0 right-0 w-24 h-24 bg-purple-50 rounded-bl-full -z-10 group-hover:scale-125 transition-transform duration-500"></div>
-             <div class="flex justify-between items-start mb-4">
-               <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">⚡</div>
-               <span class="bg-purple-50 text-purple-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">Hari Ini</span>
-             </div>
+             <div class="flex justify-between items-start mb-4"><div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">⚡</div><span class="bg-purple-50 text-purple-600 text-[10px] uppercase font-bold px-3 py-1 rounded-full">Hari Ini</span></div>
              <div><p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Total Trx Santri</p><h3 class="text-4xl font-black text-gray-800 mt-1">${trxHariIni + kegHariIni}</h3></div>
            </div>
         </div>
 
-        <!-- Kolom Bawah: Shortcut & Feed Aktivitas -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-           
-           <!-- Kiri: Akses Cepat & Status -->
            <div class="lg:col-span-1 space-y-6">
-              <!-- Kotak Shortcut -->
               <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
                  <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">🚀 Akses Cepat</h3>
                  <div class="grid grid-cols-2 gap-3">
-                    <button onclick="RoleMenus.admin[2].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-blue-50 rounded-2xl transition-colors border border-gray-100 hover:border-blue-200 group">
-                       <span class="text-2xl mb-2 group-hover:scale-110 transition-transform">👨‍🎓</span>
-                       <span class="text-xs font-bold text-gray-600 group-hover:text-blue-700">Data Santri</span>
-                    </button>
-                    <button onclick="RoleMenus.admin[1].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-emerald-50 rounded-2xl transition-colors border border-gray-100 hover:border-emerald-200 group">
-                       <span class="text-2xl mb-2 group-hover:scale-110 transition-transform">📅</span>
-                       <span class="text-xs font-bold text-gray-600 group-hover:text-emerald-700">Atur Jadwal</span>
-                    </button>
-                    <button onclick="RoleMenus.admin[5].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-purple-50 rounded-2xl transition-colors border border-gray-100 hover:border-purple-200 group">
-                       <span class="text-2xl mb-2 group-hover:scale-110 transition-transform">📊</span>
-                       <span class="text-xs font-bold text-gray-600 group-hover:text-purple-700">Laporan Bazar</span>
-                    </button>
-                    <button onclick="RoleMenus.admin[6].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-indigo-50 rounded-2xl transition-colors border border-gray-100 hover:border-indigo-200 group">
-                       <span class="text-2xl mb-2 group-hover:scale-110 transition-transform">📝</span>
-                       <span class="text-xs font-bold text-gray-600 group-hover:text-indigo-700">Lap. Kegiatan</span>
-                    </button>
+                    <button onclick="RoleMenus.admin[2].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-blue-50 rounded-2xl transition-colors border border-gray-100 hover:border-blue-200 group"><span class="text-2xl mb-2 group-hover:scale-110 transition-transform">👨‍🎓</span><span class="text-xs font-bold text-gray-600 group-hover:text-blue-700">Data Santri</span></button>
+                    <button onclick="RoleMenus.admin[1].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-emerald-50 rounded-2xl transition-colors border border-gray-100 hover:border-emerald-200 group"><span class="text-2xl mb-2 group-hover:scale-110 transition-transform">📅</span><span class="text-xs font-bold text-gray-600 group-hover:text-emerald-700">Atur Jadwal</span></button>
+                    <button onclick="RoleMenus.admin[5].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-purple-50 rounded-2xl transition-colors border border-gray-100 hover:border-purple-200 group"><span class="text-2xl mb-2 group-hover:scale-110 transition-transform">📊</span><span class="text-xs font-bold text-gray-600 group-hover:text-purple-700">Laporan Bazar</span></button>
+                    <button onclick="RoleMenus.admin[6].action()" class="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-indigo-50 rounded-2xl transition-colors border border-gray-100 hover:border-indigo-200 group"><span class="text-2xl mb-2 group-hover:scale-110 transition-transform">📝</span><span class="text-xs font-bold text-gray-600 group-hover:text-indigo-700">Lap. Kegiatan</span></button>
                  </div>
               </div>
-              
-              <!-- Kotak Status Sistem -->
               <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 shadow-md text-white relative overflow-hidden">
                  <div class="relative z-10">
                     <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Status Layanan</h3>
-                    <div class="flex items-center gap-3 mb-3">
-                       <div class="w-3 h-3 bg-green-400 rounded-full shadow-[0_0_10px_#4ade80] animate-pulse"></div>
-                       <p class="text-sm font-medium">Database (Google Sheet) Online</p>
-                    </div>
-                    <div class="flex items-center gap-3 mb-5">
-                       <div class="w-3 h-3 bg-blue-400 rounded-full shadow-[0_0_10px_#60a5fa]"></div>
-                       <p class="text-sm font-medium">Server Frontend Aktif</p>
-                    </div>
+                    <div class="flex items-center gap-3 mb-3"><div class="w-3 h-3 bg-green-400 rounded-full shadow-[0_0_10px_#4ade80] animate-pulse"></div><p class="text-sm font-medium">Database Supabase Online ⚡</p></div>
+                    <div class="flex items-center gap-3 mb-5"><div class="w-3 h-3 bg-blue-400 rounded-full shadow-[0_0_10px_#60a5fa]"></div><p class="text-sm font-medium">Server Frontend Aktif</p></div>
                     <button onclick="refreshAppData()" class="w-full bg-white/10 hover:bg-white/20 py-3 rounded-xl text-sm font-bold transition-colors">Segarkan Dashboard</button>
                  </div>
               </div>
            </div>
-
-           <!-- Kanan: Feed Aktivitas -->
            <div class="lg:col-span-2">
               <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
-                 <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">🔥 Pantauan Aktivitas Terkini</h3>
-                    <span class="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Real-time</span>
-                 </div>
-                 
-                 <div class="space-y-4 flex-1">
-                    ${aktivitas.length > 0 ? aktivitas.slice(0, 6).map(a => `
-                       <div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:shadow-md transition-all group">
-                          <div class="flex items-center gap-4">
-                             <div class="w-12 h-12 ${a.tipe === 'jajan' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'} rounded-xl flex items-center justify-center text-xl shadow-sm group-hover:scale-110 transition-transform">
-                                ${a.tipe === 'jajan' ? '🛒' : '📋'}
-                             </div>
-                             <div>
-                                <p class="font-bold text-gray-800 text-sm md:text-base">${a.teks}</p>
-                                <p class="text-xs text-gray-500 font-mono mt-0.5">${a.waktu || '-'}</p>
-                             </div>
-                          </div>
-                          <div class="text-right">
-                             <p class="font-bold font-mono text-gray-800 text-sm md:text-base">Rp ${parseInt(a.nominal||0).toLocaleString('id-ID')}</p>
-                             <p class="text-[10px] font-bold uppercase tracking-wider ${a.tipe === 'jajan' ? 'text-emerald-600' : 'text-indigo-600'} mt-0.5">${a.tipe}</p>
-                          </div>
-                       </div>
-                    `).join('') : `
-                       <div class="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-                          <div class="text-5xl mb-4">😴</div>
-                          <p class="text-gray-500 font-bold">Belum ada transaksi terekam.</p>
-                       </div>
-                    `}
-                 </div>
+                 <div class="flex justify-between items-center mb-6"><h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">🔥 Pantauan Aktivitas Terkini</h3><span class="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Real-time</span></div>
+                 <div class="space-y-4 flex-1">${actHTML}</div>
               </div>
            </div>
-
         </div>
       `;
     }
@@ -533,17 +619,17 @@
         <p class="text-gray-500 mb-8">Pemantauan cepat arus kas keuangan hari ini.</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
            <div class="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-3xl shadow-lg text-white"><div class="flex justify-between mb-4"><p class="text-blue-100 font-bold uppercase text-sm">Voucher Beredar</p><span class="text-2xl bg-white/20 p-2 rounded-lg">💳</span></div><h3 class="text-4xl font-extrabold mb-1">Rp ${totalBeredar.toLocaleString('id-ID')}</h3></div>
-           <div class="bg-gradient-to-br from-orange-500 to-red-600 p-6 rounded-3xl shadow-lg text-white"><div class="flex justify-between mb-4"><p class="text-orange-100 font-bold uppercase text-sm">Antrean Pencairan</p><span class="text-2xl bg-white/20 p-2 rounded-lg">⏳</span></div><h3 class="text-4xl font-extrabold mb-1">${antreanPencairan} <span class="text-lg font-normal">Antrean</span></h3></div>
+           <div class="bg-gradient-to-br from-orange-500 to-red-600 p-6 rounded-3xl shadow-lg text-white"><div class="flex justify-between mb-4"><p class="text-orange-100 font-bold uppercase text-sm">Antrean Pencairan Bazar</p><span class="text-2xl bg-white/20 p-2 rounded-lg">⏳</span></div><h3 class="text-4xl font-extrabold mb-1">${antreanPencairan} <span class="text-lg font-normal">Antrean</span></h3></div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <div class="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex justify-between"><div><p class="text-sm font-bold text-gray-500 uppercase mb-1">Pencairan Selesai</p><h3 class="text-2xl font-extrabold text-emerald-700">Rp ${totalSelesaiPencairan.toLocaleString('id-ID')}</h3></div><div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-xl">✅</div></div>
-           <div class="bg-white p-6 rounded-2xl shadow-sm border border-purple-100 flex justify-between"><div><p class="text-sm font-bold text-gray-500 uppercase mb-1">Setoran Bazar</p><h3 class="text-2xl font-extrabold text-purple-700">Rp ${totalSemuaSetoran.toLocaleString('id-ID')}</h3></div><div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-xl">📥</div></div>
+           <div class="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex justify-between"><div><p class="text-sm font-bold text-gray-500 uppercase mb-1">Pencairan Bazar Selesai</p><h3 class="text-2xl font-extrabold text-emerald-700">Rp ${totalSelesaiPencairan.toLocaleString('id-ID')}</h3></div><div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-xl">✅</div></div>
+           <div class="bg-white p-6 rounded-2xl shadow-sm border border-purple-100 flex justify-between"><div><p class="text-sm font-bold text-gray-500 uppercase mb-1">Setoran Tunai Bazar</p><h3 class="text-2xl font-extrabold text-purple-700">Rp ${totalSemuaSetoran.toLocaleString('id-ID')}</h3></div><div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-xl">📥</div></div>
         </div>
       `;
     }
 
     // ==========================================
-    // MASTER SANTRI (DENGAN UPLOAD FOTO KOMPRESI)
+    // MASTER SANTRI
     // ==========================================
     async function renderMasterSantri() {
       document.getElementById('main-content').innerHTML = `
@@ -592,22 +678,13 @@
                 const img = new Image();
                 img.onload = function() {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 250;
-                    const MAX_HEIGHT = 250;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                    } else {
-                        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
+                    const MAX_WIDTH = 250; const MAX_HEIGHT = 250;
+                    let width = img.width; let height = img.height;
+                    if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+                    else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                    canvas.width = width; canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-                    
-                    // Kompres jadi JPEG ukuran kecil agar aman di Google Sheet
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.7); 
                     document.getElementById('f-foto-preview').src = dataUrl;
                     document.getElementById('f-foto-base64').value = dataUrl;
@@ -640,7 +717,6 @@
       let valSaldo = santri ? santri.saldo : 0;
       let valFoto = santri ? (santri.foto || '') : '';
       let isNew = santri ? 'false' : 'true';
-      
       let previewImg = formatFotoUrl(valFoto, valNama || 'S');
 
       const html = `
@@ -686,9 +762,6 @@
       });
     }
 
-    // ==========================================
-    // DESAIN VOUCHER BARU (ID CARD - TANPA SALDO)
-    // ==========================================
     function showQR(id_target) {
       let santri = null;
       if (AppCache['Santri']) {
@@ -697,52 +770,24 @@
           }
       }
       if(!santri) return;
-      
       let imgUrl = formatFotoUrl(santri.foto, santri.nama);
 
       const html = `
         <div class="flex flex-col items-center py-4 print:py-0">
            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-xl w-full max-w-sm text-center relative overflow-hidden">
-              <!-- Header -->
               <div class="absolute top-0 left-0 w-full h-16 bg-blue-700"></div>
-              <div class="relative z-10 text-white mb-6">
-                 <h3 class="text-sm font-extrabold uppercase tracking-widest mt-1">Kartu Santri & Pembayaran</h3>
-                 <p class="text-[10px] font-semibold opacity-80">Ponpes Al-Islam</p>
-              </div>
-              
-              <!-- Foto Santri -->
-              <div class="relative z-10 mb-3 mt-2">
-                 <img src="${imgUrl}" class="w-24 h-24 rounded-full mx-auto object-cover border-4 border-white shadow-md bg-white">
-              </div>
-              
-              <!-- Identitas -->
+              <div class="relative z-10 text-white mb-6"><h3 class="text-sm font-extrabold uppercase tracking-widest mt-1">Kartu Santri & Pembayaran</h3><p class="text-[10px] font-semibold opacity-80">Ponpes Al-Islam</p></div>
+              <div class="relative z-10 mb-3 mt-2"><img src="${imgUrl}" class="w-24 h-24 rounded-full mx-auto object-cover border-4 border-white shadow-md bg-white"></div>
               <h4 class="text-xl font-bold text-gray-900 leading-tight mb-1">${santri.nama}</h4>
-              <p class="text-gray-500 mb-6 font-mono text-xs font-semibold bg-gray-100 inline-block px-3 py-1 rounded-full border border-gray-200">
-                ${santri.id_santri} • ${santri.rayon || 'Pondok'}
-              </p>
-              
-              <!-- Area QR -->
-              <div class="bg-gray-50 p-3 rounded-2xl inline-block mb-1 border border-gray-200 shadow-sm">
-                 <div id="qr-container" class="w-[150px] h-[150px]"></div>
-              </div>
+              <p class="text-gray-500 mb-6 font-mono text-xs font-semibold bg-gray-100 inline-block px-3 py-1 rounded-full border border-gray-200">${santri.id_santri} • ${santri.rayon || 'Pondok'}</p>
+              <div class="bg-gray-50 p-3 rounded-2xl inline-block mb-1 border border-gray-200 shadow-sm"><div id="qr-container" class="w-[150px] h-[150px]"></div></div>
               <p class="text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-wide">Pindai QR Untuk Transaksi</p>
            </div>
-           <button onclick="window.print()" class="mt-8 w-full max-w-sm bg-blue-600 hover:bg-blue-700 transition-colors text-white font-bold py-3.5 rounded-xl shadow-lg print:hidden">
-             🖨️ Cetak Kartu Santri
-           </button>
+           <button onclick="window.print()" class="mt-8 w-full max-w-sm bg-blue-600 hover:bg-blue-700 transition-colors text-white font-bold py-3.5 rounded-xl shadow-lg print:hidden">🖨️ Cetak Kartu Santri</button>
         </div>
       `;
       openModal('Cetak ID Card & QR', html);
-      setTimeout(function() {
-        new QRCode(document.getElementById("qr-container"), { 
-            text: santri.id_santri, 
-            width: 150, 
-            height: 150, 
-            colorDark: "#1e3a8a", // Warna QR Biru Gelap
-            colorLight: "#f9fafb", 
-            correctLevel: QRCode.CorrectLevel.H 
-        });
-      }, 200);
+      setTimeout(function() { new QRCode(document.getElementById("qr-container"), { text: santri.id_santri, width: 150, height: 150, colorDark: "#1e3a8a", colorLight: "#f9fafb", correctLevel: QRCode.CorrectLevel.H }); }, 200);
     }
 
     // ==========================================
@@ -1010,29 +1055,16 @@
       
       html5QrCodeAbsen = new Html5Qrcode("reader-absen");
       html5QrCodeAbsen.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } },
-        function(decodedText) { 
-            document.getElementById('a-id').value = decodedText; 
-            stopKameraAbsen(); 
-            submitAbsensi(decodedText); 
-        },
+        function(decodedText) { document.getElementById('a-id').value = decodedText; stopKameraAbsen(); submitAbsensi(decodedText); },
         function(errorMessage) { }
-      ).catch(function() { 
-          showToast('Gagal kamera.', 'error'); 
-          stopKameraAbsen(); 
-      });
+      ).catch(function() { showToast('Gagal kamera.', 'error'); stopKameraAbsen(); });
     }
 
     function stopKameraAbsen() {
-      if (html5QrCodeAbsen && html5QrCodeAbsen.isScanning) { 
-          html5QrCodeAbsen.stop().then(function() { html5QrCodeAbsen.clear(); }).catch(function(){}); 
-      }
+      if (html5QrCodeAbsen && html5QrCodeAbsen.isScanning) { html5QrCodeAbsen.stop().then(function() { html5QrCodeAbsen.clear(); }).catch(function(){}); }
       const container = document.getElementById('reader-absen-container');
       const btnKamera = document.getElementById('btn-kamera-absen');
-      if(container) { 
-          container.classList.add('hidden'); 
-          btnKamera.innerHTML = '📷 Buka Kamera Scanner'; 
-          btnKamera.className = 'w-full bg-emerald-50 text-emerald-700 font-bold py-3 rounded-xl border border-emerald-200 mb-4'; 
-      }
+      if(container) { container.classList.add('hidden'); btnKamera.innerHTML = '📷 Buka Kamera Scanner'; btnKamera.className = 'w-full bg-emerald-50 text-emerald-700 font-bold py-3 rounded-xl border border-emerald-200 mb-4'; }
     }
 
     // ==========================================
@@ -1072,9 +1104,7 @@
       if(data) {
         let p = null;
         for(let i=0; i<data.length; i++) {
-            if(data[i].id_pedagang.toUpperCase() === query.toUpperCase() || data[i].nama.toLowerCase().includes(query.toLowerCase())) {
-                p = data[i]; break;
-            }
+            if(data[i].id_pedagang.toUpperCase() === query.toUpperCase() || data[i].nama.toLowerCase().includes(query.toLowerCase())) { p = data[i]; break; }
         }
         if(p) {
            document.getElementById('s-id').value = p.id_pedagang;
@@ -1108,14 +1138,12 @@
            <div><h2 class="text-3xl font-extrabold text-gray-800 tracking-tight mb-1">Laporan Khusus Bazar</h2><p class="text-gray-500">Pemantauan perputaran uang dan setoran tunai bazar.</p></div>
            <button onclick="exportLaporanCSV()" class="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2">Download Excel (CSV)</button>
         </div>
-        
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
            <div class="bg-gradient-to-br from-blue-500 to-blue-700 p-5 rounded-2xl shadow-lg text-white"><p class="text-xs uppercase font-bold mb-1">Uang Beredar</p><div id="card-beredar" class="text-3xl font-extrabold mt-2">...</div></div>
            <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 p-5 rounded-2xl shadow-lg text-white"><p class="text-xs uppercase font-bold mb-1">Volume Jajan</p><div id="card-trx" class="text-3xl font-extrabold mt-2">...</div></div>
            <div class="bg-white border-2 border-indigo-100 p-5 rounded-2xl"><p class="text-indigo-500 text-xs uppercase font-bold mb-1">Total Shodaqoh</p><div id="card-shodaqoh" class="text-3xl font-extrabold text-indigo-700 mt-2">...</div></div>
            <div class="bg-white border-2 border-purple-100 p-5 rounded-2xl"><p class="text-purple-500 text-xs uppercase font-bold mb-1">Total Sewa Tenda</p><div id="card-sewa" class="text-3xl font-extrabold text-purple-700 mt-2">...</div></div>
         </div>
-        
         <div class="mb-8">
             <h3 class="text-xl font-bold text-gray-800 mb-4 border-l-4 border-emerald-500 pl-3">Rekap Setoran per Pedagang</h3>
             <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -1124,41 +1152,14 @@
                </div>
             </div>
         </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h3 class="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-3">Riwayat Transaksi Jajan</h3>
-            <div class="bg-white rounded-xl border overflow-hidden"><div class="overflow-x-auto max-h-[400px] overflow-y-auto"><table class="w-full text-left whitespace-nowrap"><thead class="bg-gray-50 border-b text-xs font-bold sticky top-0"><tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Merchant</th><th class="px-4 py-3 text-right">Nilai</th></tr></thead><tbody id="table-riwayat" class="divide-y"><tr><td colspan="3" class="px-4 py-6 text-center">Memuat...</td></tr></tbody></table></div></div>
-          </div>
-          <div>
-            <h3 class="text-xl font-bold mb-4 border-l-4 border-indigo-500 pl-3">Riwayat Setoran (Tunai)</h3>
-            <div class="bg-white rounded-xl border overflow-hidden"><div class="overflow-x-auto max-h-[400px] overflow-y-auto"><table class="w-full text-left whitespace-nowrap"><thead class="bg-gray-50 border-b text-xs font-bold sticky top-0"><tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Pedagang & Jenis</th><th class="px-4 py-3 text-right">Nominal</th></tr></thead><tbody id="table-setoran" class="divide-y"><tr><td colspan="3" class="px-4 py-6 text-center">Memuat...</td></tr></tbody></table></div></div>
-          </div>
-        </div>
       `;
       
       const [santriData, pdgData, trxData, setoranData] = await Promise.all([ getTableData('Santri'), getTableData('Pedagang'), getTableData('Transaksi'), getTableData('Setoran') ]);
-      
-      const mapSantri = {}; 
-      if (santriData) santriData.forEach(function(s) { mapSantri[s.id_santri] = s.nama; });
-      
-      const mapPdg = {}; 
-      if (pdgData) pdgData.forEach(function(p) { mapPdg[p.id_pedagang] = p.nama; });
-      
       if (santriData && trxData) {
          let sumBeredar = 0; santriData.forEach(function(x){ sumBeredar += parseInt(x.saldo||0); });
          let sumTrx = 0; trxData.forEach(function(x){ sumTrx += parseInt(x.nominal||0); });
-         
          document.getElementById('card-beredar').innerHTML = 'Rp ' + sumBeredar.toLocaleString('id-ID');
          document.getElementById('card-trx').innerHTML = 'Rp ' + sumTrx.toLocaleString('id-ID');
-         
-         const recentTrx = [].concat(trxData).reverse().slice(0, 50); 
-         let trxHTML = '';
-         for(let i=0; i<recentTrx.length; i++) {
-             let t = recentTrx[i];
-             trxHTML += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-xs text-gray-500">' + t.tanggal + '</td><td class="px-4 py-3 text-sm"><div class="font-bold text-blue-700">' + (mapSantri[t.id_santri]||t.id_santri) + '</div><div class="text-xs text-emerald-600">➔ ' + (mapPdg[t.id_pedagang]||t.id_pedagang) + '</div></td><td class="px-4 py-3 text-right font-mono font-bold">Rp ' + parseInt(t.nominal||0).toLocaleString('id-ID') + '</td></tr>';
-         }
-         document.getElementById('table-riwayat').innerHTML = trxHTML || '<tr><td colspan="3" class="px-4 py-8 text-center">Kosong.</td></tr>';
       }
 
       if (setoranData) {
@@ -1167,7 +1168,6 @@
              if(x.jenis==='Shodaqoh') sumShod += parseInt(x.nominal||0); 
              if(x.jenis==='Sewa Tenda') sumSewa += parseInt(x.nominal||0); 
          });
-         
          document.getElementById('card-shodaqoh').innerHTML = 'Rp ' + sumShod.toLocaleString('id-ID');
          document.getElementById('card-sewa').innerHTML = 'Rp ' + sumSewa.toLocaleString('id-ID');
 
@@ -1185,14 +1185,6 @@
              rHtml += '<tr class="hover:bg-emerald-50/50"><td class="px-4 py-3 font-mono text-sm">' + id + '</td><td class="px-4 py-3 font-bold">' + data.nama + '</td><td class="px-4 py-3 text-right text-indigo-700">Rp ' + data.shodaqoh.toLocaleString('id-ID') + '</td><td class="px-4 py-3 text-right text-purple-700">Rp ' + data.sewa.toLocaleString('id-ID') + '</td><td class="px-4 py-3 text-right font-extrabold text-emerald-700 bg-emerald-50/30">Rp ' + (data.shodaqoh+data.sewa).toLocaleString('id-ID') + '</td></tr>';
          }
          document.getElementById('table-rekap-pedagang').innerHTML = rHtml || '<tr><td colspan="5" class="px-4 py-8 text-center">Belum ada.</td></tr>';
-
-         const recentSet = [].concat(setoranData).reverse().slice(0, 50);
-         let setHTML = '';
-         for(let i=0; i<recentSet.length; i++) {
-             let t = recentSet[i];
-             setHTML += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-xs text-gray-500">' + t.tanggal + '</td><td class="px-4 py-3 text-sm"><div class="font-bold">' + t.nama_pedagang + '</div><div class="text-xs uppercase">' + t.jenis + '</div></td><td class="px-4 py-3 text-right font-mono font-bold">Rp ' + parseInt(t.nominal||0).toLocaleString('id-ID') + '</td></tr>';
-         }
-         document.getElementById('table-setoran').innerHTML = setHTML || '<tr><td colspan="3" class="px-4 py-8 text-center">Kosong.</td></tr>';
       }
     }
 
@@ -1226,12 +1218,10 @@
            <div><h2 class="text-3xl font-extrabold text-gray-800">Laporan Pembayaran Kegiatan</h2></div>
            <button onclick="exportLaporanKegiatanCSV()" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold">Download Rekap Excel</button>
         </div>
-        
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 rounded-2xl shadow-lg text-white"><p class="text-indigo-100 text-xs uppercase font-bold mb-1">Total Dana Terkumpul</p><div id="card-total-keg" class="text-4xl font-extrabold mt-2">...</div></div>
            <div class="bg-white border-2 border-indigo-100 p-6 rounded-2xl flex items-center justify-between"><div><p class="text-indigo-500 text-xs uppercase font-bold mb-1">Volume Transaksi</p><div id="card-count-keg" class="text-4xl font-extrabold mt-2">...</div></div><div class="text-5xl">📋</div></div>
         </div>
-
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div class="lg:col-span-1">
             <h3 class="text-xl font-bold mb-4 border-l-4 border-indigo-500 pl-3">Rekap per Kategori</h3>
@@ -1245,13 +1235,10 @@
       `;
 
       const [sData, kData] = await Promise.all([ getTableData('Santri'), getTableData('Pembayaran_Kegiatan') ]);
-      
-      const mapS = {}; 
-      if(sData) sData.forEach(function(s){ mapS[s.id_santri] = s.nama; });
+      const mapS = {}; if(sData) sData.forEach(function(s){ mapS[s.id_santri] = s.nama; });
 
       if(kData && kData.length > 0) {
          let totalKeg = 0; kData.forEach(function(x) { totalKeg += parseInt(x.nominal||0); });
-         
          document.getElementById('card-total-keg').innerHTML = 'Rp ' + totalKeg.toLocaleString('id-ID');
          document.getElementById('card-count-keg').innerHTML = kData.length + ' Trx';
          
@@ -1287,34 +1274,118 @@
         const kData = AppCache['Pembayaran_Kegiatan']; 
         const sData = AppCache['Santri'];
         if(!kData || kData.length === 0) return showToast('Kosong', 'error');
-        
-        const mapS = {}; 
-        if(sData) sData.forEach(function(s) { mapS[s.id_santri] = s.nama; });
+        const mapS = {}; if(sData) sData.forEach(function(s) { mapS[s.id_santri] = s.nama; });
         
         let csv = "ID Transaksi;Waktu;ID Santri;Nama Santri;Jenis Kegiatan;Nominal Potongan;Petugas\n";
         let tot = 0;
-        
         let reverseData = [].concat(kData).reverse();
         for(let i=0; i<reverseData.length; i++) { 
             let t = reverseData[i];
-            const nom = parseInt(t.nominal||0); 
-            tot += nom; 
+            const nom = parseInt(t.nominal||0); tot += nom; 
             csv += (t.id_trx||'-') + ';' + (t.waktu||t.tanggal||'-') + ';' + t.id_santri + ';' + (mapS[t.id_santri]||'-') + ';' + t.kegiatan + ';' + nom + ';' + (t.petugas||'-') + '\n'; 
         }
         csv += '\nTOTAL;;;;;' + tot + ';\n';
-        
         const link = document.createElement("a");
         link.href = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' }));
-        link.download = 'Laporan_Kegiatan.csv'; 
-        link.click();
+        link.download = 'Laporan_Kegiatan.csv'; link.click();
     };
 
     // ==========================================
-    // APPROVAL PENCAIRAN BENDAHARA
+    // MENU BARU: PENCAIRAN DANA KEGIATAN BENDAHARA
+    // ==========================================
+    async function renderPencairanKegiatan() {
+      document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600"></div></div>';
+      
+      const [kData, wdData] = await Promise.all([ getTableData('Pembayaran_Kegiatan'), getTableData('Pencairan_Kegiatan') ]);
+
+      const rekap = {};
+      if(kData) {
+         kData.forEach(function(k) {
+            const keg = k.kegiatan || 'Lainnya';
+            if(!rekap[keg]) rekap[keg] = { masuk: 0, keluar: 0 };
+            rekap[keg].masuk += parseInt(k.nominal||0);
+         });
+      }
+      if(wdData) {
+         wdData.forEach(function(w) {
+            const keg = w.kegiatan || 'Lainnya';
+            if(!rekap[keg]) rekap[keg] = { masuk: 0, keluar: 0 };
+            rekap[keg].keluar += parseInt(w.nominal||0);
+         });
+      }
+
+      let optionHtml = '<option value="">-- Pilih Kas Kegiatan --</option>';
+      let tableHtml = '';
+      for(const keg in rekap) {
+         const sisa = rekap[keg].masuk - rekap[keg].keluar;
+         optionHtml += '<option value="' + keg + '">[ Sisa: Rp ' + sisa.toLocaleString('id-ID') + ' ] - ' + keg + '</option>';
+         tableHtml += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 font-semibold text-gray-800">' + keg + '</td><td class="px-4 py-3 text-right text-indigo-600">Rp ' + rekap[keg].masuk.toLocaleString('id-ID') + '</td><td class="px-4 py-3 text-right text-red-600">Rp ' + rekap[keg].keluar.toLocaleString('id-ID') + '</td><td class="px-4 py-3 text-right font-bold text-emerald-600 bg-emerald-50/30">Rp ' + sisa.toLocaleString('id-ID') + '</td></tr>';
+      }
+
+      let historyHtml = '';
+      if(wdData && wdData.length > 0) {
+         const recent = [].concat(wdData).reverse().slice(0, 50);
+         for(let i=0; i<recent.length; i++) {
+             let w = recent[i];
+             historyHtml += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-xs text-gray-500">' + (w.waktu||'-') + '</td><td class="px-4 py-3 font-bold text-indigo-700">' + (w.kegiatan||'-') + '</td><td class="px-4 py-3 text-right font-mono font-bold text-gray-800">Rp ' + parseInt(w.nominal||0).toLocaleString('id-ID') + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-1 text-[10px] font-bold rounded-full bg-green-100 text-green-700">BERHASIL DITARIK</span></td><td class="px-4 py-3 text-xs text-gray-500 text-center">' + (w.petugas||'-') + '</td></tr>';
+         }
+      } else {
+         historyHtml = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Belum ada riwayat penarikan kas kegiatan.</td></tr>';
+      }
+
+      document.getElementById('main-content').innerHTML = `
+        <div class="max-w-5xl mx-auto mt-2">
+          <div class="mb-6 border-b-2 border-indigo-500 inline-block pb-1">
+             <h2 class="text-3xl font-extrabold text-gray-800">Penarikan Kas Kegiatan</h2>
+             <p class="text-gray-500 mt-1">Tarik dana kegiatan yang sudah terkumpul dari dompet digital ke uang tunai.</p>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+               <div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex justify-center items-center text-xl">🏧</div><h2 class="text-xl font-bold">Form Penarikan</h2></div>
+               <div class="mb-5"><label class="block font-bold mb-2 text-sm text-gray-700">Pilih Kas Kegiatan</label><select id="wdk-kegiatan" class="w-full bg-gray-50 border border-gray-300 p-3.5 rounded-xl font-bold text-gray-800 outline-none focus:border-indigo-500">${optionHtml}</select></div>
+               <div class="mb-6"><label class="block font-bold mb-2 text-sm text-gray-700">Nominal Penarikan (Rp)</label><input type="number" id="wdk-nom" class="w-full bg-gray-50 border border-gray-300 p-3.5 rounded-xl text-xl font-bold text-indigo-700 outline-none focus:border-indigo-500" placeholder="0"></div>
+               <button onclick="submitPencairanKegiatan()" class="w-full bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-bold py-4 rounded-xl shadow-md">Tarik Dana Sekarang</button>
+            </div>
+
+            <div class="lg:col-span-2">
+               <h3 class="text-lg font-bold mb-4 border-l-4 border-indigo-500 pl-3">Sisa Saldo Per Kas Kegiatan</h3>
+               <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+                 <div class="overflow-x-auto">
+                   <table class="w-full text-left whitespace-nowrap text-sm"><thead class="bg-indigo-50 border-b border-indigo-100 text-indigo-800 uppercase text-xs font-bold"><tr><th class="px-4 py-3">Kategori</th><th class="px-4 py-3 text-right">Total Masuk</th><th class="px-4 py-3 text-right">Telah Ditarik</th><th class="px-4 py-3 text-right">Sisa Tersedia</th></tr></thead><tbody class="divide-y divide-gray-100">${tableHtml || '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-400">Belum ada kas kegiatan.</td></tr>'}</tbody></table>
+                 </div>
+               </div>
+
+               <h3 class="text-lg font-bold mb-4 border-l-4 border-emerald-500 pl-3">Riwayat Penarikan Dana</h3>
+               <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                 <div class="overflow-x-auto max-h-[300px] overflow-y-auto">
+                   <table class="w-full text-left whitespace-nowrap text-sm"><thead class="bg-gray-50 border-b border-gray-100 text-gray-600 uppercase text-[10px] font-bold sticky top-0"><tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Kas Kegiatan</th><th class="px-4 py-3 text-right">Nominal (Rp)</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-center">Petugas</th></tr></thead><tbody class="divide-y divide-gray-100">${historyHtml}</tbody></table>
+                 </div>
+               </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function submitPencairanKegiatan() {
+       const keg = document.getElementById('wdk-kegiatan').value;
+       const nom = parseInt(document.getElementById('wdk-nom').value);
+       if(!keg) return showToast('Pilih kas kegiatan terlebih dahulu', 'error');
+       if(!nom || nom <= 0) return showToast('Nominal tidak valid', 'error');
+
+       confirmAction('Tarik dana <b>Rp ' + nom.toLocaleString('id-ID') + '</b> dari kas <b>' + keg + '</b>?', async function() {
+          const res = await fetchAPI('pencairan_kegiatan', { kegiatan: keg, nominal: nom, petugas: AppState.user.username });
+          if(res) { clearCache('Pencairan_Kegiatan'); showToast('Dana berhasil dicairkan!'); renderPencairanKegiatan(); }
+       });
+    }
+
+    // ==========================================
+    // APPROVAL PENCAIRAN BAZAR BENDAHARA
     // ==========================================
     async function renderApprovePencairan() {
       document.getElementById('main-content').innerHTML = `
-        <div class="mb-8 border-b-2 border-red-500 inline-block pb-1"><h2 class="text-3xl font-extrabold text-gray-800">Approval Pencairan Dana</h2></div>
+        <div class="mb-8 border-b-2 border-red-500 inline-block pb-1"><h2 class="text-3xl font-extrabold text-gray-800">Pencairan Dana Bazar</h2></div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
            <div class="overflow-x-auto">
              <table class="w-full text-left whitespace-nowrap"><thead class="bg-gray-50 border-b text-gray-600 uppercase text-xs font-bold"><tr><th class="px-6 py-4">No. Pengajuan</th><th class="px-6 py-4">Waktu Request</th><th class="px-6 py-4">Nama & ID Pedagang</th><th class="px-6 py-4 text-right">Nominal Pencairan</th><th class="px-6 py-4 text-center">Status System</th><th class="px-6 py-4 text-center">Tindakan</th></tr></thead><tbody id="tb-wd" class="divide-y divide-gray-100"><tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Memuat antrean...</td></tr></tbody></table>
@@ -1382,10 +1453,8 @@
         if(s) {
            document.getElementById('t-id').value = s.id_santri;
            b.className = 'mt-3 p-4 rounded-xl border bg-green-50 border-green-200';
-           
            let imgUrl = formatFotoUrl(s.foto, s.nama);
            b.innerHTML = '<div class="flex items-center gap-4"><img src="' + imgUrl + '" class="w-14 h-14 rounded-full object-cover border-2 border-green-300 shadow-sm"><div class="flex-1"><div class="font-bold text-green-800 text-lg">✅ ' + s.nama + '</div><div class="text-sm font-medium text-green-700">Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</div></div></div>';
-           
         } else { b.className = 'mt-3 p-4 rounded-xl border bg-red-50 border-red-200'; b.innerHTML = '❌ Tidak ditemukan!'; }
       }
     }
@@ -1442,10 +1511,8 @@
         if(s) {
            document.getElementById('b-id').value = s.id_santri;
            b.className = 'mt-3 p-3 rounded-xl border bg-green-50 border-green-200';
-           
            let imgUrl = formatFotoUrl(s.foto, s.nama);
            b.innerHTML = '<div class="flex items-center gap-4"><img src="' + imgUrl + '" class="w-14 h-14 rounded-full object-cover border-2 border-green-300 shadow-sm"><div class="flex-1"><div class="font-bold text-green-800 text-lg">✅ ' + s.nama + '</div><div class="text-sm font-medium text-green-700">Sisa Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</div></div></div>';
-           
            document.getElementById('b-nom').focus();
         } else { b.className = 'mt-3 p-3 rounded-xl border bg-red-50 border-red-100'; b.innerHTML = '❌ Tidak ditemukan!'; }
       }
@@ -1539,10 +1606,8 @@
         if(s) {
            document.getElementById('j-id').value = s.id_santri;
            b.className = 'mt-3 p-3 rounded-xl border bg-green-50 border-green-200';
-           
            let imgUrl = formatFotoUrl(s.foto, s.nama);
            b.innerHTML = '<div class="flex items-center gap-4"><img src="' + imgUrl + '" class="w-14 h-14 rounded-full object-cover border-2 border-green-300 shadow-sm"><div class="flex-1"><div class="font-bold text-green-800 text-lg">✅ ' + s.nama + '</div><div class="text-sm font-medium text-green-700">Saldo: Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</div></div></div>';
-           
            document.getElementById('j-nom').focus();
         } else { b.className = 'mt-3 p-3 rounded-xl border bg-red-50 border-red-100 text-red-600 font-bold'; b.innerHTML = '❌ Tidak ditemukan!'; }
       }
@@ -1633,7 +1698,7 @@
         if (activeBtn) activeBtn.click();
         else if (AppState.user.role === 'pedagang') renderDashboardPedagang();
         else RoleMenus[AppState.user.role][0].action();
-        setTimeout(function() { document.getElementById('loading-overlay').classList.add('hidden'); showToast('Data berhasil diperbarui!'); }, 1000);
+        setTimeout(function() { document.getElementById('loading-overlay').classList.add('hidden'); showToast('Data berhasil disinkronkan kilat! ⚡'); }, 800);
     };
 
   </script>
