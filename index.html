@@ -412,6 +412,9 @@
         { id: 'topup_saldo', icon: '💳', label: 'Topup Voucher', action: renderTopup },
         { id: 'bayar_kegiatan', icon: '📋', label: 'Pembayaran Santri', action: renderBayarKegiatan }
       ]
+      viewer: [
+        { id: 'dashboard_viewer', icon: '📈', label: 'Laporan Pemantauan', action: renderDashboardViewer }
+      ]
     };
 
     function renderMainApp() {
@@ -1900,6 +1903,113 @@
         else RoleMenus[AppState.user.role][0].action();
         setTimeout(function() { document.getElementById('loading-overlay').classList.add('hidden'); showToast('Data berhasil disinkronkan kilat! ⚡'); }, 800);
     };
+
+    // ==========================================
+    // DASHBOARD VIEWER (PEMANTAUAN BAZAR)
+    // ==========================================
+    async function renderDashboardViewer() {
+      document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div></div>';
+
+      const [pdgData, trxData, setoranData] = await Promise.all([
+          getTableData('Pedagang'), getTableData('Transaksi'), getTableData('Setoran')
+      ]);
+
+      const mapPdg = {};
+      if(pdgData) pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
+
+      // Tanggal hari ini untuk filter Omzet
+      const hariIni = new Date().toLocaleDateString('id-ID');
+
+      const rekap = {};
+      if(pdgData) pdgData.forEach(p => {
+         rekap[p.id_pedagang] = { nama: p.nama, omzet_hari_ini: 0, shodaqoh: 0, sewa: 0 };
+      });
+
+      // Hitung Omzet Harian (Jajan Hari Ini)
+      if(trxData) {
+         trxData.forEach(t => {
+             if((t.waktu || t.tanggal || '').includes(hariIni)) {
+                 if(!rekap[t.id_pedagang]) rekap[t.id_pedagang] = { nama: mapPdg[t.id_pedagang] || t.id_pedagang, omzet_hari_ini: 0, shodaqoh: 0, sewa: 0 };
+                 rekap[t.id_pedagang].omzet_hari_ini += parseInt(t.nominal || 0);
+             }
+         });
+      }
+
+      // Hitung Total Setoran (Semua waktu)
+      if(setoranData) {
+         setoranData.forEach(s => {
+             if(!rekap[s.id_pedagang]) rekap[s.id_pedagang] = { nama: mapPdg[s.id_pedagang] || s.nama_pedagang, omzet_hari_ini: 0, shodaqoh: 0, sewa: 0 };
+             const nom = parseInt(s.nominal || 0);
+             if(s.jenis === 'Shodaqoh') rekap[s.id_pedagang].shodaqoh += nom;
+             if(s.jenis === 'Sewa Tenda') rekap[s.id_pedagang].sewa += nom;
+         });
+      }
+
+      let rHtml = '';
+      let totOmzet = 0, totShodaqoh = 0, totSewa = 0;
+
+      for (const id in rekap) {
+         let d = rekap[id];
+         // Jika ingin menyembunyikan yang 0 semua, buka komentar baris di bawah:
+         // if(d.omzet_hari_ini === 0 && d.shodaqoh === 0 && d.sewa === 0) continue; 
+         
+         totOmzet += d.omzet_hari_ini;
+         totShodaqoh += d.shodaqoh;
+         totSewa += d.sewa;
+
+         rHtml += '<tr class="hover:bg-blue-50/50"><td class="px-4 py-4 font-mono text-sm text-gray-500">' + id + '</td><td class="px-4 py-4 font-bold text-gray-800">' + d.nama + '</td><td class="px-4 py-4 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30">Rp ' + d.omzet_hari_ini.toLocaleString('id-ID') + '</td><td class="px-4 py-4 text-right font-mono font-bold text-indigo-600">Rp ' + d.shodaqoh.toLocaleString('id-ID') + '</td><td class="px-4 py-4 text-right font-mono font-bold text-purple-600">Rp ' + d.sewa.toLocaleString('id-ID') + '</td></tr>';
+      }
+
+      let html = `
+        <div class="max-w-6xl mx-auto mt-2">
+          <div class="mb-8 border-b-2 border-blue-500 inline-block pb-1">
+             <h2 class="text-3xl font-extrabold text-gray-800">Laporan Pemantauan Khusus</h2>
+             <p class="text-gray-500 mt-1">Status Omzet Jajan Hari Ini (<span class="font-bold text-blue-600">${hariIni}</span>) & Total Setoran Mitra.</p>
+          </div>
+
+          <!-- KARTU RINGKASAN ATAS -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+             <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 rounded-2xl shadow-lg text-white">
+                <p class="text-emerald-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Omzet (Hari Ini)</p>
+                <div class="text-4xl font-extrabold mt-2">Rp ${totOmzet.toLocaleString('id-ID')}</div>
+             </div>
+             <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 rounded-2xl shadow-lg text-white">
+                <p class="text-indigo-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Shodaqoh</p>
+                <div class="text-4xl font-extrabold mt-2">Rp ${totShodaqoh.toLocaleString('id-ID')}</div>
+             </div>
+             <div class="bg-gradient-to-br from-purple-500 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
+                <p class="text-purple-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Sewa Tenda</p>
+                <div class="text-4xl font-extrabold mt-2">Rp ${totSewa.toLocaleString('id-ID')}</div>
+             </div>
+          </div>
+
+          <!-- TABEL RINCIAN -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+             <div class="p-5 border-b bg-gray-50 flex justify-between items-center">
+                 <h3 class="font-bold text-gray-700">Rincian Per Pedagang</h3>
+                 <button onclick="refreshAppData()" class="text-sm font-bold bg-blue-100 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-200 transition-colors">🔄 Segarkan Data</button>
+             </div>
+             <div class="overflow-x-auto">
+               <table class="w-full text-left whitespace-nowrap">
+                 <thead class="bg-white border-b border-gray-200 text-gray-500 uppercase text-xs font-bold">
+                   <tr>
+                     <th class="px-4 py-4">ID</th>
+                     <th class="px-4 py-4">Nama Toko</th>
+                     <th class="px-4 py-4 text-right bg-emerald-50/50">Omzet Harian</th>
+                     <th class="px-4 py-4 text-right">Total Shodaqoh</th>
+                     <th class="px-4 py-4 text-right">Total Sewa Tenda</th>
+                   </tr>
+                 </thead>
+                 <tbody class="divide-y divide-gray-100">
+                   ${rHtml || '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Belum ada data untuk ditampilkan.</td></tr>'}
+                 </tbody>
+               </table>
+             </div>
+          </div>
+        </div>
+      `;
+      document.getElementById('main-content').innerHTML = html;
+    }
 
   </script>
 </body>
