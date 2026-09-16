@@ -521,7 +521,7 @@
       let pedagangAktif = 0;
       if(pedagang) { for(let i=0; i<pedagang.length; i++) { if(pedagang[i].status_aktif !== 'Libur') pedagangAktif++; } }
       
-      const hariIni = new Date().toLocaleDateString('id-ID');
+      const hariIni = new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
       let hadirHariIni = 0;
       if(kehadiran) { for(let i=0; i<kehadiran.length; i++) { if((kehadiran[i].waktu || kehadiran[i].tanggal || '').includes(hariIni)) hadirHariIni++; } }
       
@@ -1936,7 +1936,7 @@
       if(pdgData) pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
 
       // Tanggal hari ini untuk filter Omzet
-      const hariIni = new Date().toLocaleDateString('id-ID');
+      const hariIni = new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
 
       const rekap = {};
       if(pdgData) pdgData.forEach(p => {
@@ -2158,7 +2158,7 @@
        
        document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div></div>';
        
-       await supabaseClient.from('cashflow').insert([{ tanggal: new Date().toLocaleString('id-ID'), deskripsi: desk, jenis: jenis, nominal: parseInt(nom) }]);
+       await supabaseClient.from('cashflow').insert([{ tanggal: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }), deskripsi: desk, jenis: jenis, nominal: parseInt(nom) }]);
        renderCashFlow();
     }
 
