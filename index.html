@@ -409,9 +409,10 @@
         { id: 'jajan_input', icon: '🛒', label: 'Proses Jajan', action: renderInputJajan },
         { id: 'ajukan_wd', icon: '💰', label: 'Ajukan Pencairan', action: renderAjukanWD }
       ],
-      edc: [
+     edc: [
         { id: 'topup_saldo', icon: '💳', label: 'Topup Voucher', action: renderTopup },
-        { id: 'bayar_kegiatan', icon: '📋', label: 'Pembayaran Santri', action: renderBayarKegiatan }
+        { id: 'bayar_kegiatan', icon: '📋', label: 'Pembayaran Santri', action: renderBayarKegiatan },
+        { id: 'cetak_kartu', icon: '🖨️', label: 'Cetak ID Card', action: renderCetakKartu }
       ],
       viewer: [
         { id: 'dashboard_viewer', icon: '📈', label: 'Laporan Pemantauan', action: renderDashboardViewer }
@@ -2166,6 +2167,68 @@
        
        await supabaseClient.from('cashflow').delete().eq('id', id);
        renderCashFlow();
+    }
+
+    // ==========================================
+    // MENU KHUSUS: CETAK KARTU (UNTUK EDC)
+    // ==========================================
+    async function renderCetakKartu() {
+      document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div></div>';
+      
+      const data = await getTableData('Santri');
+      const arr = data || [];
+      let trHtml = '';
+      
+      arr.forEach((s, i) => {
+         trHtml += `
+           <tr class="hover:bg-gray-50 border-b border-gray-100">
+             <td class="px-4 py-3 text-sm text-gray-500 font-mono">${i+1}</td>
+             <td class="px-4 py-3 text-sm font-bold text-gray-800">${s.nama}</td>
+             <td class="px-4 py-3 text-sm font-mono text-gray-500">${s.id_santri}</td>
+             <td class="px-4 py-3 text-sm text-gray-500">${s.rayon || '-'}</td>
+             <td class="px-4 py-3 text-center">
+                <button onclick="showQR('${s.id_santri}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-xl font-bold text-xs transition-colors shadow-sm">
+                   🖨️ Tampilkan Kartu
+                </button>
+             </td>
+           </tr>
+         `;
+      });
+      
+      let html = `
+        <div class="max-w-5xl mx-auto mt-2">
+          <div class="mb-6 border-b-2 border-blue-500 inline-block pb-1">
+             <h2 class="text-3xl font-extrabold text-gray-800">Pusat Cetak Kartu QR</h2>
+             <p class="text-gray-500 mt-1">Cari nama santri dan klik tampilkan untuk mendownload/mencetak ID Card.</p>
+          </div>
+          
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+             <!-- Baris Pencarian Cepat -->
+             <div class="p-5 border-b bg-gray-50">
+                <input type="text" onkeyup="let trs=document.querySelectorAll('#tabel-cetak tbody tr'); let q=this.value.toLowerCase(); trs.forEach(tr=>tr.style.display=tr.innerText.toLowerCase().includes(q)?'':'none');" class="w-full md:w-1/2 bg-white border-2 border-gray-200 p-3 rounded-xl focus:border-blue-500 outline-none text-sm font-bold" placeholder="🔍 Cari berdasarkan Nama atau ID Santri...">
+             </div>
+             
+             <!-- Tabel Daftar Santri -->
+             <div class="overflow-x-auto h-[60vh] relative">
+               <table class="w-full text-left whitespace-nowrap" id="tabel-cetak">
+                 <thead class="bg-white border-b border-gray-200 text-gray-500 uppercase text-xs font-bold sticky top-0 shadow-sm z-10">
+                   <tr>
+                     <th class="px-4 py-4">No</th>
+                     <th class="px-4 py-4">Nama Lengkap</th>
+                     <th class="px-4 py-4">ID Santri</th>
+                     <th class="px-4 py-4">Rayon</th>
+                     <th class="px-4 py-4 text-center">Aksi</th>
+                   </tr>
+                 </thead>
+                 <tbody class="divide-y divide-gray-100">
+                   ${trHtml || '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Belum ada data santri.</td></tr>'}
+                 </tbody>
+               </table>
+             </div>
+          </div>
+        </div>
+      `;
+      document.getElementById('main-content').innerHTML = html;
     }
 
   </script>
