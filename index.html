@@ -2154,11 +2154,24 @@
        const jenis = document.getElementById('cf-jenis').value;
        const desk = document.getElementById('cf-desk').value.trim();
        const nom = document.getElementById('cf-nom').value;
+       
        if(!desk || !nom || nom <= 0) return alert('Mohon isi deskripsi dan nominal uangnya!');
        
        document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div></div>';
        
-       await supabaseClient.from('cashflow').insert([{ tanggal: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }), deskripsi: desk, jenis: jenis, nominal: parseInt(nom) }]);
+       // Proses simpan ke database dengan penangkap error
+       const { error } = await supabaseClient.from('cashflow').insert([{ 
+           tanggal: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }), 
+           deskripsi: desk, 
+           jenis: jenis, 
+           nominal: parseInt(nom) 
+       }]);
+       
+       // Jika Supabase menolak, munculkan peringatan
+       if (error) {
+           alert('Gagal menyimpan ke database: ' + error.message);
+       }
+       
        renderCashFlow();
     }
 
