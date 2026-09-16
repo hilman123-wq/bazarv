@@ -394,14 +394,16 @@
         { id: 'laporan_admin', icon: '📊', label: 'Laporan Bazar', action: renderLaporanGlobal },
         { id: 'laporan_kegiatan', icon: '📝', label: 'Laporan Kegiatan', action: renderLaporanKegiatan }
       ],
-      bendahara: [
-        { id: 'dashboard_bendahara', icon: '🏠', label: 'Dashboard Utama', action: renderDashboardBendahara },
+      bendahara_pondok: [
         { id: 'pencairan_dana', icon: '💸', label: 'Pencairan Bazar', action: renderApprovePencairan },
         { id: 'pencairan_kegiatan', icon: '🏧', label: 'Pencairan Kegiatan', action: renderPencairanKegiatan },
-        { id: 'setoran_dana', icon: '📥', label: 'Setoran Pedagang', action: renderSetoran },
-        { id: 'bayar_kegiatan', icon: '📋', label: 'Pembayaran Santri', action: renderBayarKegiatan },
-        { id: 'laporan_bendahara', icon: '📉', label: 'Laporan Bazar', action: renderLaporanGlobal },
+        { id: 'dashboard_viewer', icon: '📈', label: 'Dashboard Penjualan', action: renderDashboardViewer },
         { id: 'laporan_kegiatan', icon: '📝', label: 'Laporan Kegiatan', action: renderLaporanKegiatan }
+      ],
+      bendahara_bazar: [
+        { id: 'setoran_dana', icon: '📥', label: 'Setoran Pedagang', action: renderSetoran },
+        { id: 'laporan_bendahara', icon: '📉', label: 'Laporan Bazar', action: renderLaporanGlobal },
+        { id: 'cash_flow', icon: '💰', label: 'Buku Kas Operasional', action: renderCashFlow }
       ],
       pedagang: [
         { id: 'jajan_input', icon: '🛒', label: 'Proses Jajan', action: renderInputJajan },
@@ -2057,6 +2059,113 @@
             console.error(err);
             showToast('Gagal mendownload gambar. Silakan gunakan fitur cetak.', 'error');
         });
+    }
+
+    // ==========================================
+    // BUKU KAS OPERASIONAL (CASH FLOW)
+    // ==========================================
+    async function renderCashFlow() {
+      document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div></div>';
+      
+      const { data, error } = await supabaseClient.from('cashflow').select('*').order('id', { ascending: true });
+      const arrData = data || [];
+
+      let totalDebit = 0, totalKredit = 0, saldo = 0, trHtml = '';
+
+      arrData.forEach((row, i) => {
+         let deb = 0, kre = 0;
+         if(row.jenis === 'Debit') { deb = parseInt(row.nominal); totalDebit += deb; saldo += deb; }
+         if(row.jenis === 'Kredit') { kre = parseInt(row.nominal); totalKredit += kre; saldo -= kre; }
+         
+         trHtml += `
+           <tr class="hover:bg-gray-50 border-b border-gray-100">
+             <td class="px-4 py-3 text-sm text-gray-500 font-mono">${i+1}</td>
+             <td class="px-4 py-3 text-[11px] text-gray-500 whitespace-nowrap">${row.tanggal}</td>
+             <td class="px-4 py-3 text-sm font-bold text-gray-800">${row.deskripsi}</td>
+             <td class="px-4 py-3 text-sm text-right font-mono font-bold text-emerald-600 bg-emerald-50/30">${deb > 0 ? '+ Rp '+deb.toLocaleString('id-ID') : '-'}</td>
+             <td class="px-4 py-3 text-sm text-right font-mono font-bold text-red-600 bg-red-50/30">${kre > 0 ? '- Rp '+kre.toLocaleString('id-ID') : '-'}</td>
+             <td class="px-4 py-3 text-sm text-right font-extrabold text-blue-700 font-mono bg-blue-50/30">Rp ${saldo.toLocaleString('id-ID')}</td>
+             <td class="px-4 py-3 text-center"><button onclick="hapusCashFlow(${row.id})" class="text-red-400 hover:text-red-600 transition-colors text-lg" title="Hapus Data">🗑️</button></td>
+           </tr>
+         `;
+      });
+
+      let html = `
+        <div class="max-w-6xl mx-auto">
+          <div class="mb-6 border-b-2 border-emerald-500 inline-block pb-1">
+             <h2 class="text-3xl font-extrabold text-gray-800">Buku Kas Operasional</h2>
+             <p class="text-gray-500 mt-1">Kelola arus uang masuk (Debit) & keluar (Kredit) khusus bazar.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+             <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 rounded-2xl shadow-lg text-white">
+                <p class="text-emerald-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Debit (Masuk)</p>
+                <div class="text-3xl font-extrabold mt-2">Rp ${totalDebit.toLocaleString('id-ID')}</div>
+             </div>
+             <div class="bg-gradient-to-br from-red-500 to-red-700 p-6 rounded-2xl shadow-lg text-white">
+                <p class="text-red-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Kredit (Keluar)</p>
+                <div class="text-3xl font-extrabold mt-2">Rp ${totalKredit.toLocaleString('id-ID')}</div>
+             </div>
+             <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-2xl shadow-lg text-white ring-4 ring-blue-100">
+                <p class="text-blue-200 text-xs uppercase font-bold mb-1 tracking-wider">Sisa Saldo Kas</p>
+                <div class="text-4xl font-extrabold mt-2">Rp ${saldo.toLocaleString('id-ID')}</div>
+             </div>
+          </div>
+
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-8 flex flex-col md:flex-row gap-4 items-end">
+             <div class="w-full md:w-1/4">
+                <label class="block text-xs font-bold mb-1 text-gray-500 uppercase">Jenis</label>
+                <select id="cf-jenis" class="w-full bg-gray-50 border-2 border-gray-200 p-3 rounded-xl font-bold focus:border-emerald-500 outline-none">
+                   <option value="Debit">🟢 Uang Masuk (Debit)</option>
+                   <option value="Kredit">🔴 Uang Keluar (Kredit)</option>
+                </select>
+             </div>
+             <div class="w-full md:w-2/4">
+                <label class="block text-xs font-bold mb-1 text-gray-500 uppercase">Keterangan / Deskripsi</label>
+                <input type="text" id="cf-desk" class="w-full bg-gray-50 border-2 border-gray-200 p-3 rounded-xl focus:border-emerald-500 outline-none" placeholder="Cth: Hasil Shodaqoh / Beli Lakban">
+             </div>
+             <div class="w-full md:w-1/4">
+                <label class="block text-xs font-bold mb-1 text-gray-500 uppercase">Nominal (Rp)</label>
+                <input type="number" id="cf-nom" class="w-full bg-gray-50 border-2 border-gray-200 p-3 rounded-xl font-bold focus:border-emerald-500 outline-none" placeholder="0">
+             </div>
+             <button onclick="submitCashFlow()" class="w-full md:w-auto bg-gray-800 hover:bg-black text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md">Simpan Catatan</button>
+          </div>
+
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+             <div class="overflow-x-auto">
+               <table class="w-full text-left whitespace-nowrap">
+                 <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase text-[10px] font-bold">
+                   <tr><th class="px-4 py-3">No</th><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Keterangan</th><th class="px-4 py-3 text-right">Debit</th><th class="px-4 py-3 text-right">Kredit</th><th class="px-4 py-3 text-right">Saldo Berjalan</th><th class="px-4 py-3 text-center">Hapus</th></tr>
+                 </thead>
+                 <tbody class="divide-y divide-gray-50">
+                   ${trHtml || '<tr><td colspan="7" class="px-4 py-10 text-center text-gray-400 font-medium">Buku kas masih kosong.</td></tr>'}
+                 </tbody>
+               </table>
+             </div>
+          </div>
+        </div>
+      `;
+      document.getElementById('main-content').innerHTML = html;
+    }
+
+    async function submitCashFlow() {
+       const jenis = document.getElementById('cf-jenis').value;
+       const desk = document.getElementById('cf-desk').value.trim();
+       const nom = document.getElementById('cf-nom').value;
+       if(!desk || !nom || nom <= 0) return alert('Mohon isi deskripsi dan nominal uangnya!');
+       
+       document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div></div>';
+       
+       await supabaseClient.from('cashflow').insert([{ tanggal: new Date().toLocaleString('id-ID'), deskripsi: desk, jenis: jenis, nominal: parseInt(nom) }]);
+       renderCashFlow();
+    }
+
+    async function hapusCashFlow(id) {
+       if(!confirm('Yakin ingin menghapus catatan ini? Saldo akhir akan dihitung ulang secara otomatis.')) return;
+       document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div></div>';
+       
+       await supabaseClient.from('cashflow').delete().eq('id', id);
+       renderCashFlow();
     }
 
   </script>
