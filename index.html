@@ -203,8 +203,9 @@
             let resUp = await supabaseClient.from('santri').update({saldo: cS.data.saldo + parseInt(payload.nominal)}).eq('id_santri', payload.id_santri);
             if(resUp.error) throw new Error("Gagal update saldo santri: " + resUp.error.message);
 
-            // 2. Simpan Riwayat Topup
+            // 2. Simpan Riwayat Topup (Dengan ID Otomatis)
             let resIn = await supabaseClient.from('topup').insert([{ 
+                id_topup: "TP" + Date.now(),
                 id_santri: payload.id_santri, 
                 nominal: parseInt(payload.nominal), 
                 waktu: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
@@ -213,10 +214,11 @@
                 petugas: payload.petugas || 'Admin'
             }]);
             
-            // ALARM ERROR: Jika Supabase menolak, langsung munculkan peringatan!
+            // ALARM ERROR
             if(resIn.error) throw new Error("Gagal menyimpan riwayat: " + resIn.error.message);
             
             if(!silent) hideLoading(); return true;
+            
           case 'jajan':
             let stJ = await supabaseClient.from('santri').select('saldo').eq('id_santri', payload.id_santri).single();
             let pdJ = await supabaseClient.from('pedagang').select('saldo, status_aktif').eq('id_pedagang', payload.id_pedagang).single();
