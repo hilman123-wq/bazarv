@@ -218,7 +218,7 @@
             if(resIn.error) throw new Error("Gagal menyimpan riwayat: " + resIn.error.message);
             
             if(!silent) hideLoading(); return true;
-            
+
           case 'jajan':
             let stJ = await supabaseClient.from('santri').select('saldo').eq('id_santri', payload.id_santri).single();
             let pdJ = await supabaseClient.from('pedagang').select('saldo, status_aktif').eq('id_pedagang', payload.id_pedagang).single();
@@ -1227,8 +1227,77 @@
       const nom = document.getElementById('s-nom').value;
       if(!idInput.value || !nama) return showToast('Cari pedagang dulu', 'error');
       if(!nom || nom <= 0) return showToast('Nominal tidak valid', 'error');
-      const res = await fetchAPI('catat_setoran', { id_pedagang: idInput.value, nama_pedagang: nama, jenis: jenis, nominal: nom });
-      if(res) { clearCache('Setoran'); showToast('Setoran dicatat!'); renderSetoran(); }
+      
+      confirmAction('Terima setoran <b>' + jenis + '</b> sebesar <b>Rp ' + parseInt(nom).toLocaleString('id-ID') + '</b> dari <b>' + nama + '</b>?', async function() {
+          const res = await fetchAPI('catat_setoran', { id_pedagang: idInput.value, nama_pedagang: nama, jenis: jenis, nominal: nom });
+          if(res) { 
+              clearCache('Setoran'); 
+              showToast('Setoran berhasil dicatat!'); 
+              
+              // Buat Struk Serah Terima
+              const waktuSekarang = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+              const namaBendahara = AppState.user.username; // Mengambil nama akun yang sedang login
+              
+              const strukHtml = `
+                <div id="area-cetak-setoran" class="bg-white p-6 border-2 border-dashed border-gray-300 rounded-xl text-gray-800">
+                    <div class="text-center mb-5 border-b-2 border-gray-800 pb-4">
+                        <h2 class="text-xl font-black uppercase tracking-widest">Bukti Setoran</h2>
+                        <p class="text-xs font-bold mt-1 text-gray-500">Sistem Uang Digital Al-Islam</p>
+                    </div>
+                    <div class="space-y-2 mb-6 text-sm">
+                        <div class="flex justify-between"><span class="text-gray-500 font-medium">Waktu:</span> <span class="font-bold">${waktuSekarang}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500 font-medium">Bendahara:</span> <span class="font-bold">${namaBendahara}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500 font-medium">ID Pedagang:</span> <span class="font-bold">${idInput.value}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500 font-medium">Nama Toko:</span> <span class="font-bold">${nama}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500 font-medium">Kategori:</span> <span class="font-bold uppercase text-emerald-700">${jenis}</span></div>
+                    </div>
+                    <div class="bg-gray-100 p-4 rounded-lg flex justify-between items-center mb-8 border border-gray-200">
+                        <span class="font-bold text-gray-600 uppercase text-xs">Total Disetor</span>
+                        <span class="font-black text-2xl text-gray-900">Rp ${parseInt(nom).toLocaleString('id-ID')}</span>
+                    </div>
+                    
+                    <!-- Area Tanda Tangan -->
+                    <div class="flex justify-between text-center mt-6">
+                        <div class="w-1/2">
+                            <p class="text-xs text-gray-500 mb-16">Diserahkan Oleh,</p>
+                            <p class="font-bold underline text-sm">${nama}</p>
+                            <p class="text-[10px] text-gray-400">Pihak Pedagang</p>
+                        </div>
+                        <div class="w-1/2">
+                            <p class="text-xs text-gray-500 mb-16">Diterima Oleh,</p>
+                            <p class="font-bold underline text-sm">${namaBendahara}</p>
+                            <p class="text-[10px] text-gray-400">Bendahara Bazar</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tombol Aksi (Tidak akan ikut tercetak) -->
+                <div class="flex gap-3 mt-6">
+                    <button onclick="cetakStrukSetoran()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2">🖨️ Cetak Struk</button>
+                    <button onclick="closeModal(); renderSetoran();" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3.5 rounded-xl transition-colors">Selesai</button>
+                </div>
+              `;
+              
+              openModal('Struk Bukti Setoran', strukHtml);
+          }
+      });
+    }
+
+    window.cetakStrukSetoran = function() {
+        const konten = document.getElementById('area-cetak-setoran').innerHTML;
+        const printWin = window.open('', '', 'width=800,height=600');
+        printWin.document.write('<html><head><title>Cetak Struk Setoran</title>');
+        printWin.document.write('<script src="https://cdn.tailwindcss.com"></script>');
+        printWin.document.write('</head><body class="p-8" style="width: 100%; max-width: 400px; margin: 0 auto; font-family: sans-serif;">');
+        printWin.document.write(konten);
+        printWin.document.write('</body></html>');
+        printWin.document.close();
+        
+        // Jeda waktu 0.8 detik agar Tailwind CSS selesai dimuat sebelum diprint
+        setTimeout(function() { 
+            printWin.print(); 
+            printWin.close(); 
+        }, 800);
     }
 
     // ==========================================
