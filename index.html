@@ -1287,13 +1287,15 @@
         const konten = document.getElementById('area-cetak-setoran').innerHTML;
         const printWin = window.open('', '', 'width=800,height=600');
         printWin.document.write('<html><head><title>Cetak Struk Setoran</title>');
-        printWin.document.write('<script src="https://cdn.tailwindcss.com"></script>');
+        
+        // Memecah kata script agar tidak membuat error browser
+        printWin.document.write('<scr' + 'ipt src="https://cdn.tailwindcss.com"></scr' + 'ipt>');
+        
         printWin.document.write('</head><body class="p-8" style="width: 100%; max-width: 400px; margin: 0 auto; font-family: sans-serif;">');
         printWin.document.write(konten);
         printWin.document.write('</body></html>');
         printWin.document.close();
         
-        // Jeda waktu 0.8 detik agar Tailwind CSS selesai dimuat sebelum diprint
         setTimeout(function() { 
             printWin.print(); 
             printWin.close(); 
