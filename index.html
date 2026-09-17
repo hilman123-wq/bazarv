@@ -198,13 +198,17 @@
           case 'topup':
             let cS = await supabaseClient.from('santri').select('saldo').eq('id_santri', payload.id_santri).single();
             if(!cS.data) throw new Error("Santri tidak ditemukan");
+            
             await supabaseClient.from('santri').update({saldo: cS.data.saldo + parseInt(payload.nominal)}).eq('id_santri', payload.id_santri);
             await supabaseClient.from('topup').insert([{ 
-                id_santri: idSantri, 
-                nominal: parseInt(nominal), 
+                id_santri: payload.id_santri, 
+                nominal: parseInt(payload.nominal), 
                 waktu: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
-                metode: metodeDipilih // <--- TAMBAHKAN BARIS INI
+                metode: payload.metode,
+                struk: payload.struk,
+                petugas: payload.petugas
             }]);
+            
             if(!silent) hideLoading(); return true;
 
           case 'jajan':
@@ -1679,13 +1683,27 @@
     }
 
     async function submitTopup() {
-      const d = { id_santri: document.getElementById('t-id').value.trim().toUpperCase(), nominal: document.getElementById('t-nom').value, struk: document.getElementById('t-struk').value.trim(), petugas: AppState.user.username };
+      const d = { 
+          id_santri: document.getElementById('t-id').value.trim().toUpperCase(), 
+          nominal: document.getElementById('t-nom').value, 
+          struk: document.getElementById('t-struk').value.trim(), 
+          petugas: AppState.user.username,
+          metode: document.getElementById('metode-topup').value // Data metode ditangkap di sini
+      };
+      
       if(!d.id_santri || !d.nominal) return showToast('Form tidak valid', 'error');
       
       confirmAction('Konfirmasi topup <b>Rp ' + parseInt(d.nominal).toLocaleString('id-ID') + '</b> untuk <b>' + d.id_santri + '</b>?', async function() {
-        const metodeDipilih = document.getElementById('metode-topup').value;
         const res = await fetchAPI('topup', d);
-        if(res) { clearCache('Santri'); clearCache('Topup'); showToast('Topup sukses!'); document.getElementById('t-id').value=''; document.getElementById('t-nom').value=''; document.getElementById('t-info-box').classList.add('hidden'); }
+        if(res) { 
+            clearCache('Santri'); 
+            clearCache('Topup'); 
+            showToast('Topup sukses!'); 
+            document.getElementById('t-id').value=''; 
+            document.getElementById('t-nom').value=''; 
+            document.getElementById('t-struk').value=''; // Mengosongkan referensi struk
+            document.getElementById('t-info-box').classList.add('hidden'); 
+        }
       });
     }
 
