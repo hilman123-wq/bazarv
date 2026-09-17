@@ -199,9 +199,11 @@
             let cS = await supabaseClient.from('santri').select('saldo').eq('id_santri', payload.id_santri).single();
             if(!cS.data) throw new Error("Santri tidak ditemukan");
             await supabaseClient.from('santri').update({saldo: cS.data.saldo + parseInt(payload.nominal)}).eq('id_santri', payload.id_santri);
-            await supabaseClient.from('topup').insert([{
-                id_topup: "TP"+Date.now(), id_santri: payload.id_santri, 
-                nominal: payload.nominal, struk: payload.struk, petugas: payload.petugas
+            await supabaseClient.from('topup').insert([{ 
+                id_santri: idSantri, 
+                nominal: parseInt(nominal), 
+                waktu: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
+                metode: metodeDipilih // <--- TAMBAHKAN BARIS INI
             }]);
             if(!silent) hideLoading(); return true;
 
@@ -1619,6 +1621,13 @@
             </div>
             
             <div class="mb-6"><label class="block font-bold mb-2">Nominal Topup (Rp)</label><input type="number" id="t-nom" class="w-full bg-green-50 border-2 border-green-200 focus:border-green-500 outline-none p-4 rounded-xl text-xl font-bold text-green-700" placeholder="0"></div>
+            <div class="mt-4 w-full">
+              <label class="block text-xs font-bold mb-1 text-gray-500 uppercase">Metode Topup</label>
+              <select id="metode-topup" class="w-full bg-gray-50 border-2 border-gray-200 p-3 rounded-xl font-bold focus:border-blue-500 outline-none">
+                  <option value="Cash">💵 Cash / Uang Tunai (Dari Wali Santri)</option>
+                  <option value="EDC BRI">💳 Gesek / Transfer (Mesin EDC BRI)</option>
+              </select>
+            </div>
             <div class="mb-8"><label class="block font-bold mb-2">Referensi Struk</label><input type="text" id="t-struk" class="w-full bg-gray-50 border-2 p-4 rounded-xl font-mono"></div>
             
             <button onclick="submitTopup()" class="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white font-extrabold py-5 rounded-xl shadow-lg text-lg">Suntikkan Saldo</button>
@@ -1674,6 +1683,7 @@
       if(!d.id_santri || !d.nominal) return showToast('Form tidak valid', 'error');
       
       confirmAction('Konfirmasi topup <b>Rp ' + parseInt(d.nominal).toLocaleString('id-ID') + '</b> untuk <b>' + d.id_santri + '</b>?', async function() {
+        const metodeDipilih = document.getElementById('metode-topup').value;
         const res = await fetchAPI('topup', d);
         if(res) { clearCache('Santri'); clearCache('Topup'); showToast('Topup sukses!'); document.getElementById('t-id').value=''; document.getElementById('t-nom').value=''; document.getElementById('t-info-box').classList.add('hidden'); }
       });
