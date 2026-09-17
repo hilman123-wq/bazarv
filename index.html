@@ -1716,7 +1716,7 @@
           nominal: document.getElementById('t-nom').value, 
           struk: document.getElementById('t-struk').value.trim(), 
           petugas: AppState.user.username,
-          metode: document.getElementById('metode-topup').value // Data metode ditangkap di sini
+          metode: document.getElementById('metode-topup').value
       };
       
       if(!d.id_santri || !d.nominal) return showToast('Form tidak valid', 'error');
@@ -1725,11 +1725,11 @@
         const res = await fetchAPI('topup', d);
         if(res) { 
             clearCache('Santri'); 
-            clearCache('topup'; 
+            clearCache('topup'); 
             showToast('Topup sukses!'); 
-            document.getElementById('t-id').value=''; 
-            document.getElementById('t-nom').value=''; 
-            document.getElementById('t-struk').value=''; // Mengosongkan referensi struk
+            document.getElementById('t-id').value = ''; 
+            document.getElementById('t-nom').value = ''; 
+            document.getElementById('t-struk').value = ''; 
             document.getElementById('t-info-box').classList.add('hidden'); 
         }
       });
