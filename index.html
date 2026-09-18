@@ -252,16 +252,15 @@
             }]);
             if(resSetoran.error) throw new Error("Setoran gagal disimpan: " + resSetoran.error.message);
 
-            // 2. Otomatis masuk Debit ke Buku Kas Operasional
-            let resKas = await supabaseClient.from('cash_flow').insert([{
-                id_kas: "KAS" + Date.now(),
-                waktu: payload.waktu,
+            // 2. Otomatis masuk Debit ke Buku Kas Operasional (Rute Baru yang Benar)
+            let resKas = await supabaseClient.from('cashflow').insert([{
+                tanggal: payload.waktu,
                 jenis: 'Debit',
-                keterangan: "Setoran " + payload.jenis + " dari " + payload.nama_pedagang + " (" + payload.id_pedagang + ")",
-                nominal: parseInt(payload.nominal),
-                petugas: AppState.user.username || 'Bendahara'
+                deskripsi: "Setoran " + payload.jenis + " dari " + payload.nama_pedagang + " (" + payload.id_pedagang + ")",
+                nominal: parseInt(payload.nominal)
             }]);
             if(resKas.error) throw new Error("Buku kas gagal diperbarui: " + resKas.error.message);
+            
             if(!silent) hideLoading(); return true;
 
           case 'bayar_kegiatan':
