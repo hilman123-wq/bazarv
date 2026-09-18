@@ -717,19 +717,17 @@
             tHTML += '<td class="px-4 py-4">' + s.nama + '</td>';
             tHTML += '<td class="px-4 py-4"><span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">' + (s.rayon||'-') + '</span></td>';
             tHTML += '<td class="px-4 py-4 text-right font-mono font-medium text-green-600">' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</td>';
+            
+            // Kolom Aksi (Hanya 1 baris rapi di sebelah kanan)
             tHTML += '<td class="px-4 py-4 text-center space-x-2">';
             tHTML += '<button onclick="showQR(\'' + s.id_santri + '\')" class="bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded text-sm font-medium">🖨️ ID Card</button> ';
             tHTML += '<button onclick="showLaporanSantri(\'' + s.id_santri + '\')" class="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded text-sm font-bold transition-colors">📋 Laporan</button> ';
             tHTML += '<button onclick="openModalSantri(\'' + s.id_santri + '\')" class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-sm font-medium">Edit</button> ';
             tHTML += '<button onclick="deleteSantri(\'' + s.id_santri + '\')" class="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-sm font-medium">Hapus</button>';
             tHTML += '</td></tr>';
-            tHTML += '<button onclick="openModalSantri(\'' + s.id_santri + '\')" class="text-blue-600 bg-blue-50 px-3 py-1.5 rounded text-sm font-medium">Edit</button> ';
-            tHTML += '<button onclick="deleteSantri(\'' + s.id_santri + '\')" class="text-red-600 bg-red-50 px-3 py-1.5 rounded text-sm font-medium">Hapus</button>';
-            tHTML += '</td></tr>';
         }
         document.getElementById('tb-santri').innerHTML = tHTML || '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Belum ada data santri.</td></tr>';
       }
-    }
 
     function compressAndPreviewImage(input) {
         if (input.files && input.files[0]) {
