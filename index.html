@@ -2277,9 +2277,9 @@
     };
 
     // ==========================================
-    // DASHBOARD VIEWER (PEMANTAUAN BAZAR)
+    // DASHBOARD VIEWER (PEMANTAUAN BAZAR - FILTER WAKTU)
     // ==========================================
-    async function renderDashboardViewer() {
+    window.renderDashboardViewer = async function(filterPeriode = 'hari_ini') {
       document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div></div>';
 
       const [pdgData, trxData, setoranData] = await Promise.all([
@@ -2289,31 +2289,58 @@
       const mapPdg = {};
       if(pdgData) pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
 
-      // Tanggal hari ini untuk filter Omzet
-      const hariIni = new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
+      // Mesin Pengecek Waktu (Untuk menyortir data berdasarkan filter yang dipilih)
+      let today = new Date();
+      today.setHours(0,0,0,0); // Set ke jam 00:00 hari ini
+
+      function cekPeriode(strWaktu) {
+          if(filterPeriode === 'semua') return true;
+          if(!strWaktu) return false;
+          
+          let dateStr = strWaktu.split(',')[0].trim();
+          let p = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
+          if(p.length < 3) return false;
+          
+          let trxDate = new Date(p[2], p[1]-1, p[0]);
+          if (trxDate.toString() === 'Invalid Date') return false;
+
+          if(filterPeriode === 'hari_ini') {
+              return trxDate.getTime() === today.getTime();
+          } else if(filterPeriode === 'pekan_ini') {
+              let diff = (today.getTime() - trxDate.getTime()) / (1000 * 3600 * 24);
+              return diff >= 0 && diff <= 7;
+          } else if(filterPeriode === 'bulan_ini') {
+              return trxDate.getMonth() === today.getMonth() && trxDate.getFullYear() === today.getFullYear();
+          } else if(filterPeriode === 'tahun_ini') {
+              return trxDate.getFullYear() === today.getFullYear();
+          }
+          return true;
+      }
 
       const rekap = {};
       if(pdgData) pdgData.forEach(p => {
-         rekap[p.id_pedagang] = { nama: p.nama, omzet_hari_ini: 0, shodaqoh: 0, sewa: 0 };
+         rekap[p.id_pedagang] = { nama: p.nama, omzet: 0, shodaqoh: 0, sewa: 0 };
       });
 
-      // Hitung Omzet Harian (Jajan Hari Ini)
+      // Kalkulasi Omzet Jajan sesuai filter
       if(trxData) {
          trxData.forEach(t => {
-             if((t.waktu || t.tanggal || '').includes(hariIni)) {
-                 if(!rekap[t.id_pedagang]) rekap[t.id_pedagang] = { nama: mapPdg[t.id_pedagang] || t.id_pedagang, omzet_hari_ini: 0, shodaqoh: 0, sewa: 0 };
-                 rekap[t.id_pedagang].omzet_hari_ini += parseInt(t.nominal || 0);
+             if(cekPeriode(t.waktu || t.tanggal)) {
+                 if(!rekap[t.id_pedagang]) rekap[t.id_pedagang] = { nama: mapPdg[t.id_pedagang] || t.id_pedagang, omzet: 0, shodaqoh: 0, sewa: 0 };
+                 rekap[t.id_pedagang].omzet += parseInt(t.nominal || 0);
              }
          });
       }
 
-      // Hitung Total Setoran (Semua waktu)
+      // Kalkulasi Setoran sesuai filter
       if(setoranData) {
          setoranData.forEach(s => {
-             if(!rekap[s.id_pedagang]) rekap[s.id_pedagang] = { nama: mapPdg[s.id_pedagang] || s.nama_pedagang, omzet_hari_ini: 0, shodaqoh: 0, sewa: 0 };
-             const nom = parseInt(s.nominal || 0);
-             if(s.jenis === 'Shodaqoh') rekap[s.id_pedagang].shodaqoh += nom;
-             if(s.jenis === 'Sewa Tenda') rekap[s.id_pedagang].sewa += nom;
+             if(cekPeriode(s.waktu || s.tanggal)) {
+                 if(!rekap[s.id_pedagang]) rekap[s.id_pedagang] = { nama: mapPdg[s.id_pedagang] || s.nama_pedagang, omzet: 0, shodaqoh: 0, sewa: 0 };
+                 const nom = parseInt(s.nominal || 0);
+                 if(s.jenis === 'Shodaqoh') rekap[s.id_pedagang].shodaqoh += nom;
+                 if(s.jenis === 'Sewa Tenda') rekap[s.id_pedagang].sewa += nom;
+             }
          });
       }
 
@@ -2322,35 +2349,49 @@
 
       for (const id in rekap) {
          let d = rekap[id];
-         // Jika ingin menyembunyikan yang 0 semua, buka komentar baris di bawah:
-         // if(d.omzet_hari_ini === 0 && d.shodaqoh === 0 && d.sewa === 0) continue; 
-         
-         totOmzet += d.omzet_hari_ini;
+         totOmzet += d.omzet;
          totShodaqoh += d.shodaqoh;
          totSewa += d.sewa;
 
-         rHtml += '<tr class="hover:bg-blue-50/50"><td class="px-4 py-4 font-mono text-sm text-gray-500">' + id + '</td><td class="px-4 py-4 font-bold text-gray-800">' + d.nama + '</td><td class="px-4 py-4 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30">Rp ' + d.omzet_hari_ini.toLocaleString('id-ID') + '</td><td class="px-4 py-4 text-right font-mono font-bold text-indigo-600">Rp ' + d.shodaqoh.toLocaleString('id-ID') + '</td><td class="px-4 py-4 text-right font-mono font-bold text-purple-600">Rp ' + d.sewa.toLocaleString('id-ID') + '</td></tr>';
+         rHtml += '<tr class="hover:bg-blue-50/50 transition-colors"><td class="px-4 py-4 font-mono text-sm text-gray-500">' + id + '</td><td class="px-4 py-4 font-bold text-gray-800">' + d.nama + '</td><td class="px-4 py-4 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30">Rp ' + d.omzet.toLocaleString('id-ID') + '</td><td class="px-4 py-4 text-right font-mono font-bold text-indigo-600">Rp ' + d.shodaqoh.toLocaleString('id-ID') + '</td><td class="px-4 py-4 text-right font-mono font-bold text-purple-600">Rp ' + d.sewa.toLocaleString('id-ID') + '</td></tr>';
       }
+
+      // Label dinamis untuk kartu
+      let labelPeriode = filterPeriode === 'hari_ini' ? '(Hari Ini)' : filterPeriode === 'pekan_ini' ? '(7 Hari Terakhir)' : filterPeriode === 'bulan_ini' ? '(Bulan Ini)' : filterPeriode === 'tahun_ini' ? '(Tahun Ini)' : '(Semua Waktu)';
 
       let html = `
         <div class="max-w-6xl mx-auto mt-2">
-          <div class="mb-8 border-b-2 border-blue-500 inline-block pb-1">
-             <h2 class="text-3xl font-extrabold text-gray-800">Laporan Pemantauan Khusus</h2>
-             <p class="text-gray-500 mt-1">Status Omzet Jajan Hari Ini (<span class="font-bold text-blue-600">${hariIni}</span>) & Total Setoran Mitra.</p>
+          
+          <!-- Header & Filter -->
+          <div class="mb-8 border-b-2 border-blue-500 pb-4 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+              <div>
+                 <h2 class="text-3xl font-extrabold text-gray-800">Laporan Pemantauan Khusus</h2>
+                 <p class="text-gray-500 mt-1">Status Omzet Jajan & Setoran Mitra berdasarkan filter waktu.</p>
+              </div>
+              <div>
+                 <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Pilih Periode Waktu</label>
+                 <select id="filter-periode" onchange="renderDashboardViewer(this.value)" class="w-full md:w-64 bg-gray-50 border-2 border-blue-200 p-3 rounded-xl font-bold text-blue-700 outline-none focus:border-blue-500 cursor-pointer shadow-sm">
+                     <option value="hari_ini" ${filterPeriode === 'hari_ini' ? 'selected' : ''}>📅 Hari Ini</option>
+                     <option value="pekan_ini" ${filterPeriode === 'pekan_ini' ? 'selected' : ''}>📆 7 Hari Terakhir (Sepekan)</option>
+                     <option value="bulan_ini" ${filterPeriode === 'bulan_ini' ? 'selected' : ''}>🗓️ Bulan Ini</option>
+                     <option value="tahun_ini" ${filterPeriode === 'tahun_ini' ? 'selected' : ''}>📊 Tahun Ini</option>
+                     <option value="semua" ${filterPeriode === 'semua' ? 'selected' : ''}>♾️ Semua Waktu</option>
+                 </select>
+              </div>
           </div>
 
-          <!-- KARTU RINGKASAN ATAS -->
+          <!-- KARTU RINGKASAN DINAMIS -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-             <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 rounded-2xl shadow-lg text-white">
-                <p class="text-emerald-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Omzet (Hari Ini)</p>
+             <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 rounded-2xl shadow-lg text-white transform transition hover:-translate-y-1">
+                <p class="text-emerald-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Omzet ${labelPeriode}</p>
                 <div class="text-4xl font-extrabold mt-2">Rp ${totOmzet.toLocaleString('id-ID')}</div>
              </div>
-             <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 rounded-2xl shadow-lg text-white">
-                <p class="text-indigo-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Shodaqoh</p>
+             <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 rounded-2xl shadow-lg text-white transform transition hover:-translate-y-1">
+                <p class="text-indigo-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Shodaqoh ${labelPeriode}</p>
                 <div class="text-4xl font-extrabold mt-2">Rp ${totShodaqoh.toLocaleString('id-ID')}</div>
              </div>
-             <div class="bg-gradient-to-br from-purple-500 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
-                <p class="text-purple-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Sewa Tenda</p>
+             <div class="bg-gradient-to-br from-purple-500 to-purple-700 p-6 rounded-2xl shadow-lg text-white transform transition hover:-translate-y-1">
+                <p class="text-purple-100 text-xs uppercase font-bold mb-1 tracking-wider">Total Sewa Tenda ${labelPeriode}</p>
                 <div class="text-4xl font-extrabold mt-2">Rp ${totSewa.toLocaleString('id-ID')}</div>
              </div>
           </div>
@@ -2358,7 +2399,7 @@
           <!-- TABEL RINCIAN -->
           <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
              <div class="p-5 border-b bg-gray-50 flex justify-between items-center">
-                 <h3 class="font-bold text-gray-700">Rincian Per Pedagang</h3>
+                 <h3 class="font-bold text-gray-700">Rincian Per Pedagang ${labelPeriode}</h3>
                  <button onclick="refreshAppData()" class="text-sm font-bold bg-blue-100 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-200 transition-colors">🔄 Segarkan Data</button>
              </div>
              <div class="overflow-x-auto">
@@ -2367,13 +2408,13 @@
                    <tr>
                      <th class="px-4 py-4">ID</th>
                      <th class="px-4 py-4">Nama Toko</th>
-                     <th class="px-4 py-4 text-right bg-emerald-50/50">Omzet Harian</th>
+                     <th class="px-4 py-4 text-right bg-emerald-50/50">Omzet ${labelPeriode}</th>
                      <th class="px-4 py-4 text-right">Total Shodaqoh</th>
                      <th class="px-4 py-4 text-right">Total Sewa Tenda</th>
                    </tr>
                  </thead>
                  <tbody class="divide-y divide-gray-100">
-                   ${rHtml || '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Belum ada data untuk ditampilkan.</td></tr>'}
+                   ${rHtml || '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Belum ada data untuk periode ini.</td></tr>'}
                  </tbody>
                </table>
              </div>
@@ -2382,7 +2423,7 @@
       `;
       document.getElementById('main-content').innerHTML = html;
     }
-
+    
     // ==========================================
     // MESIN DOWNLOAD GAMBAR ID CARD
     // ==========================================
