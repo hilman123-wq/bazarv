@@ -719,6 +719,10 @@
             tHTML += '<td class="px-4 py-4 text-right font-mono font-medium text-green-600">' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</td>';
             tHTML += '<td class="px-4 py-4 text-center space-x-2">';
             tHTML += '<button onclick="showQR(\'' + s.id_santri + '\')" class="bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded text-sm font-medium">🖨️ ID Card</button> ';
+            tHTML += '<button onclick="showLaporanSantri(\'' + s.id_santri + '\')" class="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded text-sm font-bold transition-colors">📋 Laporan</button> ';
+            tHTML += '<button onclick="openModalSantri(\'' + s.id_santri + '\')" class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-sm font-medium">Edit</button> ';
+            tHTML += '<button onclick="deleteSantri(\'' + s.id_santri + '\')" class="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-sm font-medium">Hapus</button>';
+            tHTML += '</td></tr>';
             tHTML += '<button onclick="openModalSantri(\'' + s.id_santri + '\')" class="text-blue-600 bg-blue-50 px-3 py-1.5 rounded text-sm font-medium">Edit</button> ';
             tHTML += '<button onclick="deleteSantri(\'' + s.id_santri + '\')" class="text-red-600 bg-red-50 px-3 py-1.5 rounded text-sm font-medium">Hapus</button>';
             tHTML += '</td></tr>';
@@ -817,6 +821,100 @@
         const res = await fetchAPI('delete_santri', {id: id});
         if(res) { clearCache('Santri'); showToast('Dihapus'); renderMasterSantri(); }
       });
+    }
+
+    async function showLaporanSantri(id_target) {
+        document.getElementById('loading-overlay').classList.remove('hidden');
+
+        // Tarik semua data yang diperlukan
+        const [sData, tData, kData, pData, topupData] = await Promise.all([
+            getTableData('Santri'), getTableData('Transaksi'), getTableData('pembayaran_kegiatan'), getTableData('Pedagang'), getTableData('topup')
+        ]);
+
+        document.getElementById('loading-overlay').classList.add('hidden');
+
+        let santri = sData ? sData.find(s => s.id_santri === id_target) : null;
+        if(!santri) return showToast('Santri tidak ditemukan', 'error');
+
+        let mapPdg = {};
+        if(pData) pData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
+
+        // Saring data khusus untuk santri ini saja
+        let riwayatTopup = topupData ? topupData.filter(t => t.id_santri === id_target) : [];
+        let riwayatKeg = kData ? kData.filter(k => k.id_santri === id_target) : [];
+        let riwayatJajan = tData ? tData.filter(t => t.id_santri === id_target) : [];
+
+        // Balik urutan agar yang terbaru ada di atas
+        riwayatTopup.reverse(); riwayatKeg.reverse(); riwayatJajan.reverse();
+
+        // 1. Susun Tabel Topup
+        let htmlTopup = '';
+        if(riwayatTopup.length > 0) {
+            riwayatTopup.forEach(t => { htmlTopup += `<tr class="border-b"><td class="py-2 text-xs text-gray-500">${t.waktu||'-'}</td><td class="py-2 text-sm text-green-700 font-bold uppercase">${t.metode||'Cash'}</td><td class="py-2 text-right font-mono font-bold text-gray-800">+ Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td></tr>`; });
+        } else { htmlTopup = '<tr><td colspan="3" class="py-4 text-center text-gray-400 text-sm italic">Belum ada riwayat pengisian saldo</td></tr>'; }
+
+        // 2. Susun Tabel Kegiatan
+        let htmlKeg = '';
+        if(riwayatKeg.length > 0) {
+            riwayatKeg.forEach(k => { htmlKeg += `<tr class="border-b"><td class="py-2 text-xs text-gray-500">${k.waktu||k.tanggal||'-'}</td><td class="py-2 text-sm text-gray-800 font-bold">${k.kegiatan}</td><td class="py-2 text-right font-mono font-bold text-red-600">- Rp ${parseInt(k.nominal||0).toLocaleString('id-ID')}</td></tr>`; });
+        } else { htmlKeg = '<tr><td colspan="3" class="py-4 text-center text-gray-400 text-sm italic">Belum ada riwayat pemotongan kegiatan</td></tr>'; }
+
+        // 3. Susun Tabel Jajan
+        let htmlJajan = '';
+        if(riwayatJajan.length > 0) {
+            riwayatJajan.forEach(t => { htmlJajan += `<tr class="border-b"><td class="py-2 text-xs text-gray-500">${t.waktu||t.tanggal||'-'}</td><td class="py-2 text-sm text-gray-800 font-medium">${mapPdg[t.id_pedagang]||t.id_pedagang}</td><td class="py-2 text-right font-mono font-bold text-orange-600">- Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td></tr>`; });
+        } else { htmlJajan = '<tr><td colspan="3" class="py-4 text-center text-gray-400 text-sm italic">Belum ada riwayat jajan bazar</td></tr>'; }
+
+        const printHtml = `
+          <div id="area-cetak-laporan-santri" class="bg-white p-6 border-2 border-dashed border-gray-300 rounded-xl text-gray-800 relative">
+              <div class="text-center mb-5 border-b-2 border-gray-800 pb-4">
+                  <h2 class="text-xl font-black uppercase tracking-widest">Rincian Transaksi Santri</h2>
+                  <p class="text-xs font-bold mt-1 text-gray-500">Pondok Pesantren Al-Islam</p>
+              </div>
+              
+              <!-- Profil Santri -->
+              <div class="flex items-center gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <img src="${formatFotoUrl(santri.foto, santri.nama)}" class="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm">
+                  <div class="flex-1">
+                      <h3 class="text-lg font-bold text-gray-900 leading-tight">${santri.nama}</h3>
+                      <p class="text-xs text-gray-500 font-mono font-bold mt-1">ID: ${santri.id_santri} &bull; Rayon: ${santri.rayon || '-'}</p>
+                  </div>
+                  <div class="text-right border-l pl-4 border-gray-200">
+                      <p class="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Sisa Saldo</p>
+                      <p class="text-xl font-black text-blue-700">Rp ${parseInt(santri.saldo||0).toLocaleString('id-ID')}</p>
+                  </div>
+              </div>
+
+              <!-- Tabel-Tabel Rincian -->
+              <h4 class="font-bold text-sm text-green-700 mb-2 border-l-4 border-green-500 pl-2">1. Riwayat Uang Masuk (Topup)</h4>
+              <table class="w-full text-left mb-6">
+                  <thead><tr class="text-[10px] uppercase text-gray-400 border-b"><th class="pb-2">Waktu</th><th class="pb-2">Metode</th><th class="pb-2 text-right">Nominal</th></tr></thead>
+                  <tbody>${htmlTopup}</tbody>
+              </table>
+
+              <h4 class="font-bold text-sm text-indigo-700 mb-2 border-l-4 border-indigo-500 pl-2">2. Riwayat Pembayaran Kegiatan</h4>
+              <table class="w-full text-left mb-6">
+                  <thead><tr class="text-[10px] uppercase text-gray-400 border-b"><th class="pb-2">Waktu</th><th class="pb-2">Jenis Kegiatan</th><th class="pb-2 text-right">Potongan</th></tr></thead>
+                  <tbody>${htmlKeg}</tbody>
+              </table>
+
+              <h4 class="font-bold text-sm text-orange-700 mb-2 border-l-4 border-orange-500 pl-2">3. Riwayat Belanja Bazar</h4>
+              <table class="w-full text-left mb-2">
+                  <thead><tr class="text-[10px] uppercase text-gray-400 border-b"><th class="pb-2">Waktu</th><th class="pb-2">Nama Toko</th><th class="pb-2 text-right">Pemakaian</th></tr></thead>
+                  <tbody>${htmlJajan}</tbody>
+              </table>
+              
+              <div class="text-center mt-8 pt-4 border-t border-gray-200">
+                  <p class="text-xs text-gray-400 font-mono">Dicetak pada: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</p>
+              </div>
+          </div>
+
+          <div class="flex gap-3 mt-6 print:hidden">
+              <button onclick="cetakLaporanSantri()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2">🖨️ Cetak Untuk Wali Santri</button>
+              <button onclick="closeModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3.5 rounded-xl transition-colors">Tutup</button>
+          </div>
+        `;
+        openModal('Laporan Keuangan Santri', printHtml);
     }
 
     function showQR(id_target) {
@@ -1322,6 +1420,16 @@
         setTimeout(function() { printWin.print(); printWin.close(); }, 800);
     }
     
+    window.cetakLaporanSantri = function() {
+        const konten = document.getElementById('area-cetak-laporan-santri').innerHTML;
+        const printWin = window.open('', '', 'width=800,height=600');
+        printWin.document.write('<html><head><title>Cetak Rekening Koran Santri</title>');
+        printWin.document.write('<scr' + 'ipt src="https://cdn.tailwindcss.com"></scr' + 'ipt>');
+        printWin.document.write('</head><body class="p-6" style="width: 100%; max-width: 600px; margin: 0 auto; font-family: sans-serif;">');
+        printWin.document.write(konten); printWin.document.write('</body></html>'); printWin.document.close();
+        setTimeout(function() { printWin.print(); printWin.close(); }, 800);
+    }
+
     // ==========================================
     // LAPORAN BAZAR GLOBAL (DENGAN PAGINASI)
     // ==========================================
