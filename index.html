@@ -1356,7 +1356,7 @@
           const res = await fetchAPI('catat_setoran', { id_pedagang: idInput.value, nama_pedagang: nama, jenis: jenis, nominal: nom, waktu: waktuSetoran });
           
           if(res) { 
-              clearCache('Setoran'); 
+              clearCache('Setoran'); clearCache('cash_flow'); clearCache('Cash_Flow'); clearCache('Cash_flow');
               showToast('Setoran berhasil dicatat!'); 
               
               const namaBendahara = AppState.user.username; 
