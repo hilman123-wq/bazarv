@@ -135,7 +135,7 @@
             if(res.data) {
                 mapped = res.data.map(function(r) {
                    if(r.waktu) {
-                       let tgl = new Date(r.waktu).toLocaleString('id-ID');
+                       let tgl = s.waktu || s.tanggal || '-';
                        r.tanggal = tgl; r.waktu = tgl;
                    }
                    return r;
