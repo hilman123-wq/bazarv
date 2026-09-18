@@ -261,13 +261,30 @@
             }]);
             if(!silent) hideLoading(); return true;
 
-          case 'catat_kehadiran':
-            let pdK = await supabaseClient.from('pedagang').select('nama').eq('id_pedagang', payload.id_pedagang).single();
-            let nmP = pdK.data ? pdK.data.nama : 'Tidak Diketahui';
-            await supabaseClient.from('kehadiran').insert([{
-                id_pedagang: payload.id_pedagang, nama_pedagang: nmP
+          case 'catat_setoran':
+            // 1. Simpan ke Laporan Setoran Pedagang
+            let resSetoran = await supabaseClient.from('setoran').insert([{
+                id_setoran: "SET" + Date.now(), 
+                id_pedagang: payload.id_pedagang, 
+                nama_pedagang: payload.nama_pedagang, 
+                jenis: payload.jenis, 
+                nominal: payload.nominal,
+                waktu: payload.waktu
             }]);
-            if(!silent) hideLoading(); return { message: "Hadir", nama: nmP };
+            if(resSetoran.error) throw new Error("Setoran gagal disimpan: " + resSetoran.error.message);
+
+            // 2. Otomatis masuk Debit ke Buku Kas Operasional
+            let resKas = await supabaseClient.from('cash_flow').insert([{
+                id_kas: "KAS" + Date.now(),
+                waktu: payload.waktu,
+                jenis: 'Debit',
+                keterangan: "Setoran " + payload.jenis + " dari " + payload.nama_pedagang + " (" + payload.id_pedagang + ")",
+                nominal: parseInt(payload.nominal),
+                petugas: AppState.user.username || 'Bendahara'
+            }]);
+            if(resKas.error) throw new Error("Buku kas gagal diperbarui: " + resKas.error.message);
+
+            if(!silent) hideLoading(); return true;
 
           case 'bayar_kegiatan':
             let stK = await supabaseClient.from('santri').select('saldo, nama').eq('id_santri', payload.id_santri).single();
