@@ -115,18 +115,11 @@
         
         switch(action) {
           case 'login':
-         // Hapus .single() agar tidak crash jika ada akun duplikat
-         res = await supabaseClient.from('users').select('*').eq('username', payload.username).eq('password', payload.password);
-
-         // Tangkap dan tampilkan error aslinya jika server 404/mati
-         if(res.error) throw new Error("Error Database: " + res.error.message);
-
-         // Cek apakah data benar-benar kosong
-         if(!res.data || res.data.length === 0) throw new Error("Username atau Password salah!");
-
-         // Ambil data pertama yang cocok (meskipun ada duplikat)
-         if(!silent) hideLoading(); 
-         return res.data[0];
+             res = await supabaseClient.from('users').select('*').eq('username', payload.username).eq('password', payload.password);
+             if(res.error) throw new Error("Error Database: " + res.error.message);
+             if(!res.data || res.data.length === 0) throw new Error("Username atau Password salah!");
+             if(!silent) hideLoading(); 
+             return res.data[0];
 
           case 'get_data':
             res = await supabaseClient.from(payload.table.toLowerCase()).select('*');
@@ -134,8 +127,9 @@
             let mapped = [];
             if(res.data) {
                 mapped = res.data.map(function(r) {
-                   if(r.waktu) {
-                       let tgl = s.waktu || s.tanggal || '-';
+                   if(r.waktu || r.tanggal) {
+                       // PERBAIKAN: Mengubah 's' menjadi 'r'
+                       let tgl = r.waktu || r.tanggal || '-';
                        r.tanggal = tgl; r.waktu = tgl;
                    }
                    return r;
@@ -201,11 +195,9 @@
             let cS = await supabaseClient.from('santri').select('saldo').eq('id_santri', payload.id_santri).single();
             if(!cS.data) throw new Error("Santri tidak ditemukan");
             
-            // 1. Update Saldo Santri
             let resUp = await supabaseClient.from('santri').update({saldo: cS.data.saldo + parseInt(payload.nominal)}).eq('id_santri', payload.id_santri);
             if(resUp.error) throw new Error("Gagal update saldo santri: " + resUp.error.message);
 
-            // 2. Simpan Riwayat Topup (Dengan ID Otomatis)
             let resIn = await supabaseClient.from('topup').insert([{ 
                 id_topup: "TP" + Date.now(),
                 id_santri: payload.id_santri, 
@@ -215,10 +207,7 @@
                 struk: payload.struk || '-',
                 petugas: payload.petugas || 'Admin'
             }]);
-            
-            // ALARM ERROR
             if(resIn.error) throw new Error("Gagal menyimpan riwayat: " + resIn.error.message);
-            
             if(!silent) hideLoading(); return true;
 
           case 'jajan':
@@ -233,7 +222,8 @@
             await supabaseClient.from('pedagang').update({saldo: pdJ.data.saldo + parseInt(payload.nominal)}).eq('id_pedagang', payload.id_pedagang);
             await supabaseClient.from('transaksi').insert([{
                 id_trx: "TRX"+Date.now(), id_santri: payload.id_santri, 
-                id_pedagang: payload.id_pedagang, nominal: payload.nominal
+                id_pedagang: payload.id_pedagang, nominal: payload.nominal,
+                waktu: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
             }]);
             if(!silent) hideLoading(); return { sisa_saldo: stJ.data.saldo - parseInt(payload.nominal) };
 
@@ -248,17 +238,6 @@
 
           case 'approve_pencairan':
             await supabaseClient.from('pencairan').update({status: 'Selesai'}).eq('id_pencairan', payload.id_pencairan);
-            if(!silent) hideLoading(); return true;
-
-          case 'catat_setoran':
-            await supabaseClient.from('setoran').insert([{
-                id_setoran: "SET"+Date.now(), 
-                id_pedagang: payload.id_pedagang, 
-                nama_pedagang: payload.nama_pedagang, 
-                jenis: payload.jenis, 
-                nominal: payload.nominal,
-                waktu: payload.waktu // <-- Ini tambahan agar bisa menerima tanggal dari kalender
-            }]);
             if(!silent) hideLoading(); return true;
 
           case 'catat_setoran':
@@ -283,7 +262,6 @@
                 petugas: AppState.user.username || 'Bendahara'
             }]);
             if(resKas.error) throw new Error("Buku kas gagal diperbarui: " + resKas.error.message);
-
             if(!silent) hideLoading(); return true;
 
           case 'bayar_kegiatan':
