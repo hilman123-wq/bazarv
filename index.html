@@ -2279,7 +2279,7 @@
     // ==========================================
     // DASHBOARD VIEWER (PEMANTAUAN BAZAR - FILTER WAKTU)
     // ==========================================
-    window.renderDashboardViewer = async function(filterPeriode = 'hari_ini') {
+      async function renderDashboardViewer(filterPeriode = 'hari_ini') {
       document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div></div>';
 
       const [pdgData, trxData, setoranData] = await Promise.all([
@@ -2423,7 +2423,7 @@
       `;
       document.getElementById('main-content').innerHTML = html;
     }
-    
+
     // ==========================================
     // MESIN DOWNLOAD GAMBAR ID CARD
     // ==========================================
