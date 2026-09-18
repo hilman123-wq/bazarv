@@ -1302,6 +1302,26 @@
         }, 800);
     }
 
+    window.cetakStrukWD = function() {
+        const konten = document.getElementById('area-cetak-wd').innerHTML;
+        const printWin = window.open('', '', 'width=800,height=600');
+        printWin.document.write('<html><head><title>Cetak Pencairan Bazar</title>');
+        printWin.document.write('<scr' + 'ipt src="https://cdn.tailwindcss.com"></scr' + 'ipt>');
+        printWin.document.write('</head><body class="p-8" style="width: 100%; max-width: 400px; margin: 0 auto; font-family: sans-serif;">');
+        printWin.document.write(konten); printWin.document.write('</body></html>'); printWin.document.close();
+        setTimeout(function() { printWin.print(); printWin.close(); }, 800);
+    }
+
+    window.cetakStrukWDK = function() {
+        const konten = document.getElementById('area-cetak-wdk').innerHTML;
+        const printWin = window.open('', '', 'width=800,height=600');
+        printWin.document.write('<html><head><title>Cetak Pencairan Kegiatan</title>');
+        printWin.document.write('<scr' + 'ipt src="https://cdn.tailwindcss.com"></scr' + 'ipt>');
+        printWin.document.write('</head><body class="p-8" style="width: 100%; max-width: 400px; margin: 0 auto; font-family: sans-serif;">');
+        printWin.document.write(konten); printWin.document.write('</body></html>'); printWin.document.close();
+        setTimeout(function() { printWin.print(); printWin.close(); }, 800);
+    }
+    
     // ==========================================
     // LAPORAN BAZAR GLOBAL (DENGAN PAGINASI)
     // ==========================================
@@ -1668,7 +1688,47 @@
 
        confirmAction('Tarik dana <b>Rp ' + nom.toLocaleString('id-ID') + '</b> dari kas <b>' + keg + '</b>?', async function() {
           const res = await fetchAPI('pencairan_kegiatan', { kegiatan: keg, nominal: nom, petugas: AppState.user.username });
-          if(res) { clearCache('Pencairan_Kegiatan'); showToast('Dana berhasil dicairkan!'); renderPencairanKegiatan(); }
+          if(res) { 
+              clearCache('Pencairan_Kegiatan'); showToast('Dana berhasil dicairkan!'); renderPencairanKegiatan(); 
+              
+              const waktuSekarang = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+              const namaBendahara = AppState.user.username;
+
+              const strukHtml = `
+                <div id="area-cetak-wdk" class="bg-white p-6 border-2 border-dashed border-gray-300 rounded-xl text-gray-800">
+                    <div class="text-center mb-5 border-b-2 border-gray-800 pb-4">
+                        <h2 class="text-xl font-black uppercase tracking-widest">Tarik Tunai Kegiatan</h2>
+                        <p class="text-xs font-bold mt-1 text-gray-500">Sistem Uang Digital Al-Islam</p>
+                    </div>
+                    <div class="space-y-2 mb-6 text-sm">
+                        <div class="flex justify-between"><span class="text-gray-500 font-medium">Waktu:</span> <span class="font-bold">${waktuSekarang}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500 font-medium">Petugas/Admin:</span> <span class="font-bold">${namaBendahara}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500 font-medium">Tujuan Dana:</span> <span class="font-bold uppercase text-indigo-700">${keg}</span></div>
+                    </div>
+                    <div class="bg-gray-100 p-4 rounded-lg flex justify-between items-center mb-8 border border-gray-200">
+                        <span class="font-bold text-gray-600 uppercase text-xs">Total Tarik</span>
+                        <span class="font-black text-2xl text-gray-900">Rp ${nom.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div class="flex justify-between text-center mt-6">
+                        <div class="w-1/2">
+                            <p class="text-xs text-gray-500 mb-16">Penerima Dana,</p>
+                            <p class="font-bold underline text-sm">.......................</p>
+                            <p class="text-[10px] text-gray-400">Panitia/PJ Kegiatan</p>
+                        </div>
+                        <div class="w-1/2">
+                            <p class="text-xs text-gray-500 mb-16">Menyerahkan,</p>
+                            <p class="font-bold underline text-sm">${namaBendahara}</p>
+                            <p class="text-[10px] text-gray-400">Bendahara Pondok</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button onclick="cetakStrukWDK()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2">🖨️ Cetak Struk</button>
+                    <button onclick="closeModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3.5 rounded-xl transition-colors">Selesai</button>
+                </div>
+              `;
+              openModal('Struk Penarikan Kegiatan', strukHtml);
+          }
        });
     }
 
@@ -1707,7 +1767,59 @@
     function approveWd(id) {
       confirmAction('Pastikan uang tunai diserahkan untuk <b>' + id + '</b>?', async function() {
         const res = await fetchAPI('approve_pencairan', {id_pencairan: id});
-        if(res) { clearCache('Pencairan'); showToast('Selesai.'); renderApprovePencairan(); }
+        if(res) { 
+            // Ambil data untuk struk sebelum cache dibersihkan
+            let wData = null; let pNama = 'Mitra Pedagang';
+            if (AppCache['Pencairan']) wData = AppCache['Pencairan'].find(x => x.id_pencairan === id);
+            if (wData && AppCache['Pedagang']) {
+                let pdg = AppCache['Pedagang'].find(x => x.id_pedagang === wData.id_pedagang);
+                if (pdg) pNama = pdg.nama;
+            }
+            
+            clearCache('Pencairan'); showToast('Pencairan Selesai.'); renderApprovePencairan(); 
+            
+            // Render Struk Pencairan Bazar
+            let nom = wData ? wData.nominal : 0;
+            let id_pdg = wData ? wData.id_pedagang : '-';
+            const waktuSekarang = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+            const namaBendahara = AppState.user.username;
+
+            const strukHtml = `
+              <div id="area-cetak-wd" class="bg-white p-6 border-2 border-dashed border-gray-300 rounded-xl text-gray-800">
+                  <div class="text-center mb-5 border-b-2 border-gray-800 pb-4">
+                      <h2 class="text-xl font-black uppercase tracking-widest">Pencairan Bazar</h2>
+                      <p class="text-xs font-bold mt-1 text-gray-500">Sistem Uang Digital Al-Islam</p>
+                  </div>
+                  <div class="space-y-2 mb-6 text-sm">
+                      <div class="flex justify-between"><span class="text-gray-500 font-medium">Waktu:</span> <span class="font-bold">${waktuSekarang}</span></div>
+                      <div class="flex justify-between"><span class="text-gray-500 font-medium">No. Ref:</span> <span class="font-bold">${id}</span></div>
+                      <div class="flex justify-between"><span class="text-gray-500 font-medium">ID Pedagang:</span> <span class="font-bold">${id_pdg}</span></div>
+                      <div class="flex justify-between"><span class="text-gray-500 font-medium">Nama Toko:</span> <span class="font-bold text-blue-700">${pNama}</span></div>
+                  </div>
+                  <div class="bg-gray-100 p-4 rounded-lg flex justify-between items-center mb-8 border border-gray-200">
+                      <span class="font-bold text-gray-600 uppercase text-xs">Total Cair</span>
+                      <span class="font-black text-2xl text-gray-900">Rp ${parseInt(nom).toLocaleString('id-ID')}</span>
+                  </div>
+                  <div class="flex justify-between text-center mt-6">
+                      <div class="w-1/2">
+                          <p class="text-xs text-gray-500 mb-16">Menerima Uang,</p>
+                          <p class="font-bold underline text-sm">${pNama}</p>
+                          <p class="text-[10px] text-gray-400">Pihak Pedagang</p>
+                      </div>
+                      <div class="w-1/2">
+                          <p class="text-xs text-gray-500 mb-16">Menyerahkan,</p>
+                          <p class="font-bold underline text-sm">${namaBendahara}</p>
+                          <p class="text-[10px] text-gray-400">Bendahara Pondok</p>
+                      </div>
+                  </div>
+              </div>
+              <div class="flex gap-3 mt-6">
+                  <button onclick="cetakStrukWD()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2">🖨️ Cetak Struk</button>
+                  <button onclick="closeModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3.5 rounded-xl transition-colors">Selesai</button>
+              </div>
+            `;
+            openModal('Struk Pencairan Bazar', strukHtml);
+        }
       });
     }
 
