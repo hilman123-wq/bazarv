@@ -139,19 +139,36 @@
 
            case 'catat_kehadiran':
             let resHadir;
-            // 1. Cerdaskan aplikasi: Ambil ID yang paling valid dan jadikan HURUF BESAR
-            let trueId = String(AppState.user.id_ref || AppState.user.username || payload.id_pedagang).toUpperCase();
             
-            // 2. Proses Datanya
+            // 1. Kumpulkan semua kemungkinan ID milik orang ini
+            let myRef = String(AppState.user.id_ref || '').trim().toUpperCase();
+            let myUser = String(AppState.user.username || '').trim().toUpperCase();
+            let myPayloadId = String(payload.id_pedagang || '').trim().toUpperCase();
+            
+            let idValid = myPayloadId; // Standar awal
+            
+            // 2. Terawang langsung ke database Pedagang untuk mencari ID yang PALING BENAR
+            let { data: cekPdg } = await supabaseClient.from('pedagang').select('id_pedagang');
+            
+            if (cekPdg && cekPdg.length > 0) {
+                let cariDb = cekPdg.find(p => {
+                    let idDb = String(p.id_pedagang).trim().toUpperCase();
+                    return idDb === myRef || idDb === myUser || idDb === myPayloadId;
+                });
+                
+                if (cariDb) {
+                    idValid = cariDb.id_pedagang; // Gunakan ID asli dari Master Pedagang!
+                } else {
+                    throw new Error("Gagal absensi: Akun Anda tidak terdaftar di Master Pedagang. Hubungi Admin.");
+                }
+            }
+
+            // 3. Eksekusi Absensi dengan ID yang sudah dipastikan BENAR 100%
             if (Array.isArray(payload)) {
-                // Jika data berbentuk barisan (array)
-                payload.forEach(p => p.id_pedagang = String(p.id_pedagang).toUpperCase());
+                payload.forEach(p => p.id_pedagang = idValid);
                 resHadir = await supabaseClient.from('kehadiran').insert(payload);
             } else {
-                // Paksakan ID diubah ke ID yang sudah dikoreksi (trueId)
-                payload.id_pedagang = trueId;
-                
-                // Tambahkan stempel waktu otomatis jika belum ada
+                payload.id_pedagang = idValid;
                 if(!payload.waktu && !payload.tanggal) {
                     payload.waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
                 }
