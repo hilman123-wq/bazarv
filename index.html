@@ -138,43 +138,47 @@
             if(!silent) hideLoading(); return mapped;
 
            case 'catat_kehadiran':
+            // 1. Kumpulkan kandidat ID (Dari tombol yang diklik Admin, ATAU dari akun Pedagang yang login)
+            let idPayload = (payload && !Array.isArray(payload)) ? String(payload.id_pedagang || '').trim().toUpperCase() : '';
             let myRef = String(AppState.user.id_ref || '').trim().toUpperCase();
             let myUser = String(AppState.user.username || '').trim().toUpperCase();
             
             let idAsli = '';
+            let targetPencarian = [idPayload, myRef, myUser]; // Prioritaskan data payload (jika Admin yang scan)
 
-            // 1. Cek Cepat di Ingatan Lokal (Paling Akurat karena Dasbor Anda sudah terbuka)
-            if (typeof AppCache !== 'undefined' && AppCache['Pedagang']) {
-                let pdg = AppCache['Pedagang'].find(p => 
-                    String(p.id_pedagang).toUpperCase() === myRef || 
-                    String(p.id_pedagang).toUpperCase() === myUser
-                );
-                if (pdg) idAsli = pdg.id_pedagang;
+            // 2. Fungsi pintar untuk mengecek ke Master Pedagang
+            function cariIdValid(listTarget, dataDatabase) {
+                for (let target of listTarget) {
+                    if (!target) continue;
+                    let ketemu = dataDatabase.find(p => String(p.id_pedagang).toUpperCase() === target);
+                    if (ketemu) return ketemu.id_pedagang;
+                }
+                return '';
             }
 
-            // 2. Jika di ingatan tidak ada, paksakan cari langsung ke Database Supabase
+            // 3. Cek di memori lokal aplikasi dulu (agar super cepat)
+            if (typeof AppCache !== 'undefined' && AppCache['Pedagang']) {
+                idAsli = cariIdValid(targetPencarian, AppCache['Pedagang']);
+            }
+
+            // 4. Jika memori kosong, terawang langsung ke database Supabase
             if (!idAsli) {
                 let { data: cekPdg } = await supabaseClient.from('pedagang').select('id_pedagang');
-                if (cekPdg) {
-                    let pdgDb = cekPdg.find(p => 
-                        String(p.id_pedagang).toUpperCase() === myRef || 
-                        String(p.id_pedagang).toUpperCase() === myUser
-                    );
-                    if (pdgDb) idAsli = pdgDb.id_pedagang;
-                }
+                if (cekPdg) idAsli = cariIdValid(targetPencarian, cekPdg);
             }
 
-            // 3. PENGAMAN UTAMA: Jika tetap tidak ketemu, BATALKAN proses sebelum terjadi error 409
-            if (!idAsli) {
-                throw new Error(`Data akun Anda (${myUser}/${myRef}) tidak cocok dengan Master Pedagang. Lapor ke Admin!`);
+            // 5. PENJAGA GERBANG TERAKHIR
+            if (!idAsli && !Array.isArray(payload)) {
+                throw new Error(`Gagal: ID Pedagang tidak terdaftar di Master Pedagang. (Mencari: ${idPayload || myUser})`);
             }
 
-            // 4. Eksekusi dengan ID yang sudah 100% PASTI ADA di tabel pedagang
+            // 6. Eksekusi Penyimpanan
             let resHadir;
             if (Array.isArray(payload)) {
-                payload.forEach(p => p.id_pedagang = idAsli);
+                // Untuk absen massal
                 resHadir = await supabaseClient.from('kehadiran').insert(payload);
             } else {
+                // Untuk absen satuan
                 payload.id_pedagang = idAsli;
                 if(!payload.waktu && !payload.tanggal) {
                     payload.waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
