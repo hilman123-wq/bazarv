@@ -137,12 +137,20 @@
             }
             if(!silent) hideLoading(); return mapped;
 
-            case 'catat_kehadiran':
+           case 'catat_kehadiran':
             let resHadir;
-            // Cek apakah payload berupa banyak data (array) atau satu data
+            // 1. Cerdaskan aplikasi: Ambil ID yang paling valid dan jadikan HURUF BESAR
+            let trueId = String(AppState.user.id_ref || AppState.user.username || payload.id_pedagang).toUpperCase();
+            
+            // 2. Proses Datanya
             if (Array.isArray(payload)) {
+                // Jika data berbentuk barisan (array)
+                payload.forEach(p => p.id_pedagang = String(p.id_pedagang).toUpperCase());
                 resHadir = await supabaseClient.from('kehadiran').insert(payload);
             } else {
+                // Paksakan ID diubah ke ID yang sudah dikoreksi (trueId)
+                payload.id_pedagang = trueId;
+                
                 // Tambahkan stempel waktu otomatis jika belum ada
                 if(!payload.waktu && !payload.tanggal) {
                     payload.waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
