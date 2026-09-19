@@ -235,14 +235,16 @@
             if(!silent) hideLoading(); return { sisa_saldo: stJ.data.saldo - parseInt(payload.nominal) };
           
           case 'jajan_tunai':
-            let pdJCash = await supabaseClient.from('pedagang').select('status_aktif').eq('id_pedagang', payload.id_pedagang).single();
-            if(!pdJCash.data) throw new Error("Akses Pedagang tidak sah");
-            if(pdJCash.data.status_aktif !== 'Aktif') throw new Error("Toko sedang Libur");
+            // Mengambil status toko tanpa .single() untuk menghindari Error 406
+            let pdJCash = await supabaseClient.from('pedagang').select('status_aktif').eq('id_pedagang', payload.id_pedagang);
+            
+            // Cek apakah data kosong
+            if(!pdJCash.data || pdJCash.data.length === 0) throw new Error("Akses Pedagang tidak sah (" + payload.id_pedagang + ")");
+            if(pdJCash.data[0].status_aktif !== 'Aktif') throw new Error("Toko sedang Libur");
             
             // HANYA MENCATAT RIWAYAT (AGAR TERBACA SEBAGAI OMZET)
-            // TIDAK MENAMBAH SALDO KARENA UANG FISIK SUDAH DITERIMA PEDAGANG
             let resTrxCash = await supabaseClient.from('transaksi').insert([{
-                id_trx: "CASH"+Date.now(), 
+                id_trx: "CASH" + Date.now(), 
                 id_santri: "UMUM (TUNAI)", 
                 id_pedagang: payload.id_pedagang, 
                 nominal: payload.nominal,
@@ -2283,15 +2285,17 @@
         confirmAction('Catat transaksi tunai (pembeli umum) sebesar <b>Rp ' + parseInt(nom).toLocaleString('id-ID') + '</b>? <br><br><i class="text-xs text-gray-500">Catatan: Ini akan menambah laporan Omzet, namun tidak menambah Saldo Digital karena uang fisik sudah Anda terima.</i>', async function() {
             
             const res = await fetchAPI('jajan_tunai', { 
-                id_pedagang: AppState.user.username, 
+                // PERBAIKAN: Mengambil ID asli pedagang
+                id_pedagang: AppState.user.id_ref || AppState.user.username, 
                 nominal: nom 
             });
             
             if(res) {
                 showToast('Penjualan tunai berhasil dicatat!');
                 nomInput.value = ''; // Kosongkan kolom setelah sukses
-                // Jika pedagang punya fungsi render halaman, panggil di sini
-                // contoh: renderDashboardPedagang();
+                
+                // Segarkan memori lokal agar datanya langsung muncul
+                clearCache('Transaksi');
             }
         });
     }
