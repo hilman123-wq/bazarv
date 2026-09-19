@@ -138,44 +138,51 @@
             if(!silent) hideLoading(); return mapped;
 
            case 'catat_kehadiran':
-            let resHadir;
-            
-            // 1. Kumpulkan semua kemungkinan ID milik orang ini
             let myRef = String(AppState.user.id_ref || '').trim().toUpperCase();
             let myUser = String(AppState.user.username || '').trim().toUpperCase();
-            let myPayloadId = String(payload.id_pedagang || '').trim().toUpperCase();
             
-            let idValid = myPayloadId; // Standar awal
-            
-            // 2. Terawang langsung ke database Pedagang untuk mencari ID yang PALING BENAR
-            let { data: cekPdg } = await supabaseClient.from('pedagang').select('id_pedagang');
-            
-            if (cekPdg && cekPdg.length > 0) {
-                let cariDb = cekPdg.find(p => {
-                    let idDb = String(p.id_pedagang).trim().toUpperCase();
-                    return idDb === myRef || idDb === myUser || idDb === myPayloadId;
-                });
-                
-                if (cariDb) {
-                    idValid = cariDb.id_pedagang; // Gunakan ID asli dari Master Pedagang!
-                } else {
-                    throw new Error("Gagal absensi: Akun Anda tidak terdaftar di Master Pedagang. Hubungi Admin.");
+            let idAsli = '';
+
+            // 1. Cek Cepat di Ingatan Lokal (Paling Akurat karena Dasbor Anda sudah terbuka)
+            if (typeof AppCache !== 'undefined' && AppCache['Pedagang']) {
+                let pdg = AppCache['Pedagang'].find(p => 
+                    String(p.id_pedagang).toUpperCase() === myRef || 
+                    String(p.id_pedagang).toUpperCase() === myUser
+                );
+                if (pdg) idAsli = pdg.id_pedagang;
+            }
+
+            // 2. Jika di ingatan tidak ada, paksakan cari langsung ke Database Supabase
+            if (!idAsli) {
+                let { data: cekPdg } = await supabaseClient.from('pedagang').select('id_pedagang');
+                if (cekPdg) {
+                    let pdgDb = cekPdg.find(p => 
+                        String(p.id_pedagang).toUpperCase() === myRef || 
+                        String(p.id_pedagang).toUpperCase() === myUser
+                    );
+                    if (pdgDb) idAsli = pdgDb.id_pedagang;
                 }
             }
 
-            // 3. Eksekusi Absensi dengan ID yang sudah dipastikan BENAR 100%
+            // 3. PENGAMAN UTAMA: Jika tetap tidak ketemu, BATALKAN proses sebelum terjadi error 409
+            if (!idAsli) {
+                throw new Error(`Data akun Anda (${myUser}/${myRef}) tidak cocok dengan Master Pedagang. Lapor ke Admin!`);
+            }
+
+            // 4. Eksekusi dengan ID yang sudah 100% PASTI ADA di tabel pedagang
+            let resHadir;
             if (Array.isArray(payload)) {
-                payload.forEach(p => p.id_pedagang = idValid);
+                payload.forEach(p => p.id_pedagang = idAsli);
                 resHadir = await supabaseClient.from('kehadiran').insert(payload);
             } else {
-                payload.id_pedagang = idValid;
+                payload.id_pedagang = idAsli;
                 if(!payload.waktu && !payload.tanggal) {
                     payload.waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
                 }
                 resHadir = await supabaseClient.from('kehadiran').insert([payload]);
             }
             
-            if (resHadir.error) throw new Error("Gagal mencatat kehadiran: " + resHadir.error.message);
+            if (resHadir?.error) throw new Error("Gagal mencatat kehadiran: " + resHadir.error.message);
             if (!silent) hideLoading(); 
             return true;
 
