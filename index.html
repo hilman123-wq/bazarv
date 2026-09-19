@@ -218,13 +218,20 @@
             if(pdJ.data.status_aktif !== 'Aktif') throw new Error("Toko sedang Libur");
             if(stJ.data.saldo < parseInt(payload.nominal)) throw new Error("Saldo santri tidak mencukupi");
             
+            // 1. Potong saldo santri & tambah saldo pedagang
             await supabaseClient.from('santri').update({saldo: stJ.data.saldo - parseInt(payload.nominal)}).eq('id_santri', payload.id_santri);
             await supabaseClient.from('pedagang').update({saldo: pdJ.data.saldo + parseInt(payload.nominal)}).eq('id_pedagang', payload.id_pedagang);
-            await supabaseClient.from('transaksi').insert([{
+            
+            // 2. Simpan Riwayat Jajan (DENGAN ALARM ERROR)
+            let resTrx = await supabaseClient.from('transaksi').insert([{
                 id_trx: "TRX"+Date.now(), id_santri: payload.id_santri, 
                 id_pedagang: payload.id_pedagang, nominal: payload.nominal,
                 waktu: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
             }]);
+            
+            // Jika database menolak, aplikasi akan memunculkan layar merah
+            if(resTrx.error) throw new Error("Gagal menyimpan riwayat jajan: " + resTrx.error.message);
+            
             if(!silent) hideLoading(); return { sisa_saldo: stJ.data.saldo - parseInt(payload.nominal) };
 
           case 'ajukan_pencairan':
