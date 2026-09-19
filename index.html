@@ -233,6 +233,24 @@
             if(resTrx.error) throw new Error("Gagal menyimpan riwayat jajan: " + resTrx.error.message);
             
             if(!silent) hideLoading(); return { sisa_saldo: stJ.data.saldo - parseInt(payload.nominal) };
+          
+          case 'jajan_tunai':
+            let pdJCash = await supabaseClient.from('pedagang').select('status_aktif').eq('id_pedagang', payload.id_pedagang).single();
+            if(!pdJCash.data) throw new Error("Akses Pedagang tidak sah");
+            if(pdJCash.data.status_aktif !== 'Aktif') throw new Error("Toko sedang Libur");
+            
+            // HANYA MENCATAT RIWAYAT (AGAR TERBACA SEBAGAI OMZET)
+            // TIDAK MENAMBAH SALDO KARENA UANG FISIK SUDAH DITERIMA PEDAGANG
+            let resTrxCash = await supabaseClient.from('transaksi').insert([{
+                id_trx: "CASH"+Date.now(), 
+                id_santri: "UMUM (TUNAI)", 
+                id_pedagang: payload.id_pedagang, 
+                nominal: payload.nominal,
+                waktu: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
+            }]);
+            
+            if(resTrxCash.error) throw new Error("Gagal mencatat transaksi tunai: " + resTrxCash.error.message);
+            if(!silent) hideLoading(); return true;
 
           case 'ajukan_pencairan':
             let pdP = await supabaseClient.from('pedagang').select('saldo').eq('id_pedagang', payload.id_pedagang).single();
@@ -2145,11 +2163,23 @@
         <div class="max-w-4xl mx-auto">
           <h2 class="text-3xl font-extrabold text-gray-800 mb-6">Kios Area Bazar</h2>
           <div class="bg-amber-50 p-5 border-l-4 border-amber-500 text-amber-800 mb-8 rounded-r-lg"><div class="flex gap-3 items-start"><span class="text-2xl">📢</span><div><h4 class="font-bold text-lg mb-1">Jadwal Penjualan</h4><p class="text-sm">Bazar rutin Jumat. Libur saat libur pondok.</p></div></div></div>
-          <div class="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 rounded-3xl shadow-xl text-center text-white relative overflow-hidden">
+          
+          <div class="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 rounded-3xl shadow-xl text-center text-white relative overflow-hidden mb-6">
              <p class="text-emerald-100 font-medium tracking-widest uppercase text-sm mb-2 relative z-10">Total Omset Digital</p>
              <h1 class="text-6xl font-extrabold mb-6 relative z-10" id="d-saldo">...</h1>
              <div id="action-buttons-pedagang" class="flex justify-center gap-4 relative z-10"></div>
           </div>
+
+          <!-- KOTAK INPUT TRANSAKSI TUNAI (PEMBELI UMUM) -->
+          <div class="bg-white border-2 border-indigo-100 p-6 rounded-3xl shadow-sm">
+             <h3 class="font-extrabold text-gray-800 mb-2 flex items-center gap-2"><span>💵</span> Catat Pembeli Umum (Uang Tunai)</h3>
+             <p class="text-sm text-gray-500 mb-4">Catat pemasukan dari pembeli non-santri. Omzet akan tercatat di laporan Viewer, tapi tidak menambah saldo digital Anda.</p>
+             <div class="flex flex-col sm:flex-row gap-3">
+                 <input type="number" id="nom-tunai" placeholder="Ketik Nominal (Misal: 15000)" class="flex-1 p-4 rounded-xl border-2 border-indigo-100 focus:border-indigo-500 outline-none font-bold text-indigo-900 bg-indigo-50/30">
+                 <button onclick="submitJajanTunai()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-xl font-extrabold transition-colors shadow-lg">SIMPAN</button>
+             </div>
+          </div>
+
         </div>
       `;
       const pData = await getTableData('Pedagang');
@@ -2161,9 +2191,9 @@
            AppState.mySaldo = parseInt(me.saldo||0);
            const btn = document.getElementById('action-buttons-pedagang');
            if(me.status_aktif !== 'Libur') {
-             btn.innerHTML = '<button onclick="RoleMenus.pedagang[0].action()" class="bg-white text-emerald-700 px-6 py-3 rounded-xl font-bold shadow-lg">🛒 Buka Kasir</button><button onclick="RoleMenus.pedagang[1].action()" class="bg-emerald-800 text-white px-6 py-3 rounded-xl font-bold">Tarik Dana Tunai</button>';
+             btn.innerHTML = '<button onclick="RoleMenus.pedagang[0].action()" class="bg-white text-emerald-700 px-6 py-3 rounded-xl font-bold shadow-lg">🛒 Buka Kasir</button><button onclick="RoleMenus.pedagang[1].action()" class="bg-emerald-800 text-white px-6 py-3 rounded-xl font-bold border border-emerald-500/50 hover:bg-emerald-700 transition-colors">Tarik Dana Tunai</button>';
            } else {
-             btn.innerHTML = '<div class="bg-red-500 text-white px-6 py-3 rounded-xl font-bold opacity-90">🛑 Toko Anda Libur Hari Ini</div><button onclick="RoleMenus.pedagang[1].action()" class="bg-emerald-800 text-white px-6 py-3 rounded-xl font-bold">Tarik Dana</button>';
+             btn.innerHTML = '<div class="bg-red-500 text-white px-6 py-3 rounded-xl font-bold opacity-90 shadow-lg">🛑 Toko Anda Libur Hari Ini</div><button onclick="RoleMenus.pedagang[1].action()" class="bg-emerald-800 text-white px-6 py-3 rounded-xl font-bold border border-emerald-500/50 hover:bg-emerald-700 transition-colors">Tarik Dana</button>';
            }
         }
       }
@@ -2244,6 +2274,28 @@
       }
     }
 
+    async function submitJajanTunai() {
+        const nomInput = document.getElementById('nom-tunai');
+        const nom = nomInput ? nomInput.value : 0;
+        
+        if(!nom || nom <= 0) return showToast('Masukkan nominal yang benar', 'error');
+
+        confirmAction('Catat transaksi tunai (pembeli umum) sebesar <b>Rp ' + parseInt(nom).toLocaleString('id-ID') + '</b>? <br><br><i class="text-xs text-gray-500">Catatan: Ini akan menambah laporan Omzet, namun tidak menambah Saldo Digital karena uang fisik sudah Anda terima.</i>', async function() {
+            
+            const res = await fetchAPI('jajan_tunai', { 
+                id_pedagang: AppState.user.username, 
+                nominal: nom 
+            });
+            
+            if(res) {
+                showToast('Penjualan tunai berhasil dicatat!');
+                nomInput.value = ''; // Kosongkan kolom setelah sukses
+                // Jika pedagang punya fungsi render halaman, panggil di sini
+                // contoh: renderDashboardPedagang();
+            }
+        });
+    }
+    
     async function renderAjukanWD() {
       document.getElementById('main-content').innerHTML = `
         <div class="max-w-4xl mx-auto mt-2">
