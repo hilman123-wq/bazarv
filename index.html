@@ -35,10 +35,26 @@
     let supabaseClient = null;
 
     function formatFotoUrl(url, nama) {
+        // Jika kosong, tampilkan avatar default berinisial nama
         if(!url) return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(nama || 'S') + '&background=e0f2fe&color=0369a1&size=150';
+        
+        // Jika formatnya sudah Base64 dari kamera/file lokal
         if(url.startsWith('data:image')) return url;
-        let match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-        if (match && match[1]) { return 'https://drive.google.com/uc?export=view&id=' + match[1]; }
+        
+        // Ekstrak ID Rahasia Google Drive dari berbagai jenis Link
+        let fileId = null;
+        let matchD = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        let matchId = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        
+        if (matchD) fileId = matchD[1];
+        else if (matchId) fileId = matchId[1];
+        
+        // Jika terdeteksi sebagai link Google Drive, ubah menjadi link bypass anti-blokir
+        if (fileId) { 
+            return 'https://lh3.googleusercontent.com/d/' + fileId; 
+        }
+        
+        // Jika link internet biasa, biarkan apa adanya
         return url;
     }
 
