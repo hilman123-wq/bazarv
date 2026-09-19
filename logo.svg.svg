@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Gradasi Latar Belakang (Emerald ke Teal) -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#14b8a6" />
+    </linearGradient>
+    
+    <!-- Gradasi Kartu (Putih ke Abu-abu sangat muda) -->
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f1f5f9" />
+    </linearGradient>
+
+    <!-- Bayangan Kartu -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#064e3b" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Latar Belakang Ikon Aplikasi -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Lingkaran Dekoratif Halus (Bulan Sabit Stylized) -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity="0.15" />
+  <circle cx="280" cy="230" r="180" fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.05" />
+
+  <!-- Badan Kartu Digital -->
+  <rect x="116" y="166" width="280" height="180" rx="24" fill="url(#cardGrad)" filter="url(#shadow)" />
+
+  <!-- Cip Pintar Emas -->
+  <rect x="156" y="216" width="48" height="36" rx="8" fill="#fbbf24" />
+  <line x1="156" y1="234" x2="204" y2="234" stroke="#d97706" stroke-width="2" opacity="0.5" />
+  <line x1="180" y1="216" x2="180" y2="252" stroke="#d97706" stroke-width="2" opacity="0.5" />
+
+  <!-- Garis Elegan Kartu -->
+  <rect x="156" y="276" width="80" height="12" rx="6" fill="#cbd5e1" />
+  <rect x="156" y="300" width="120" height="12" rx="6" fill="#e2e8f0" />
+
+  <!-- Tipografi Inisial "eS" -->
+  <text x="360" y="306" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="56" fill="#059669" text-anchor="end" letter-spacing="-4">eS</text>
+  
+  <!-- Aksen Sinyal NFC/Digital -->
+  <path d="M 330 200 A 30 30 0 0 1 360 230" fill="none" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" />
+  <path d="M 345 185 A 50 50 0 0 1 390 230" fill="none" stroke="#cbd5e1" stroke-width="6" stroke-linecap="round" />
+</svg>
