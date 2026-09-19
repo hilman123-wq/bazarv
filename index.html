@@ -1366,24 +1366,45 @@
     }
 
     async function refreshTabelAbsensi() {
-      const data = await getTableData('Kehadiran', true);
-      if (data && data.length > 0) {
-        const recentAbsen = [].concat(data).reverse().slice(0, 50);
+      // 1. Ambil data Kehadiran dan data Pedagang sekaligus secara paralel
+      const [dataKehadiran, dataPedagang] = await Promise.all([
+          getTableData('Kehadiran', true),
+          getTableData('Pedagang')
+      ]);
+
+      // 2. Buat "Kamus" untuk mencocokkan ID dengan Nama Lengkap
+      const kamusNama = {};
+      if (dataPedagang) {
+          dataPedagang.forEach(p => {
+              let id = String(p.id_pedagang || '').trim().toUpperCase();
+              kamusNama[id] = p.nama;
+          });
+      }
+
+      // 3. Susun tabel absensi
+      if (dataKehadiran && dataKehadiran.length > 0) {
+        const recentAbsen = [].concat(dataKehadiran).reverse().slice(0, 50);
         let html = '';
         for(let i=0; i<recentAbsen.length; i++) {
             let a = recentAbsen[i];
             let waktuAbsen = a.waktu || a.tanggal || '-';
             let jamSaja = waktuAbsen.toString().includes(',') ? waktuAbsen.toString().split(',')[1].trim() : waktuAbsen;
-            html += '<tr class="hover:bg-gray-50">';
+            
+            let idPdg = String(a.id_pedagang || '').toUpperCase();
+            
+            // 4. Inti perbaikan: Ambil nama dari kamus, jika tidak ada, tulis 'Toko Tidak Dikenal'
+            let namaLengkap = kamusNama[idPdg] || a.nama_pedagang || 'Toko Tidak Dikenal';
+
+            html += '<tr class="hover:bg-gray-50 transition-colors">';
             html += '<td class="px-4 py-3 text-sm text-gray-500 font-mono">' + jamSaja + '</td>';
-            html += '<td class="px-4 py-3 font-medium text-gray-900">' + (a.id_pedagang || '-') + '</td>';
-            html += '<td class="px-4 py-3 font-semibold text-emerald-700">' + (a.nama_pedagang || '-') + '</td>';
-            html += '<td class="px-4 py-3 text-center"><span class="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full">Hadir</span></td>';
+            html += '<td class="px-4 py-3 font-medium text-gray-900">' + idPdg + '</td>';
+            html += '<td class="px-4 py-3 font-semibold text-emerald-700">' + namaLengkap + '</td>';
+            html += '<td class="px-4 py-3 text-center"><span class="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full shadow-sm">Hadir</span></td>';
             html += '</tr>';
         }
         document.getElementById('tb-absensi').innerHTML = html;
       } else { 
-          document.getElementById('tb-absensi').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Belum ada data absensi.</td></tr>'; 
+          document.getElementById('tb-absensi').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 font-medium">Belum ada data absensi hari ini.</td></tr>'; 
       }
     }
 
