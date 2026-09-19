@@ -2509,7 +2509,7 @@
              mapPdg[p.id_pedagang] = p.nama;
              rekap[p.id_pedagang] = { 
                  nama: p.nama, 
-                 saldo: parseInt(p.saldo || 0), // Menarik Saldo Digital
+                 saldo: parseInt(p.saldo || 0), 
                  omzet: 0, 
                  shodaqoh: 0, 
                  sewa: 0 
@@ -2517,7 +2517,7 @@
           });
       }
 
-      // Mesin Pengecek Waktu (Sudah Diperbaiki)
+      // Mesin Pengecek Waktu
       let today = new Date();
       today.setHours(0,0,0,0); 
 
@@ -2530,10 +2530,10 @@
           
           if (dateStr.includes('/')) {
               let p = dateStr.split('/');
-              if(p.length === 3) trxDate = new Date(p[2], p[1]-1, p[0]); // Format DD/MM/YYYY
+              if(p.length === 3) trxDate = new Date(p[2], p[1]-1, p[0]); 
           } else if (dateStr.includes('-')) {
               let p = dateStr.split('-');
-              if(p.length === 3) trxDate = new Date(p[0], p[1]-1, p[2]); // Format YYYY-MM-DD
+              if(p.length === 3) trxDate = new Date(p[0], p[1]-1, p[2]); 
           }
           
           if (!trxDate || trxDate.toString() === 'Invalid Date') return false;
@@ -2571,7 +2571,7 @@
       }
 
       let rHtml = '';
-      let totOmzet = 0, totShodaqoh = 0, totSewa = 0;
+      let totOmzet = 0, totShodaqoh = 0, totSewa = 0, totSaldoDigital = 0;
 
       // 4. Susun Baris Tabel
       for (const id in rekap) {
@@ -2579,9 +2579,10 @@
          totOmzet += d.omzet;
          totShodaqoh += d.shodaqoh;
          totSewa += d.sewa;
+         totSaldoDigital += d.saldo; // Penjumlahan untuk Total Saldo Digital
 
          rHtml += `
-         <tr class="hover:bg-blue-50/50 transition-colors">
+         <tr class="hover:bg-blue-50/50 transition-colors border-b border-gray-100">
             <td class="px-4 py-4 font-mono text-sm text-gray-500">${id}</td>
             <td class="px-4 py-4 font-bold text-gray-800">${d.nama}</td>
             <td class="px-4 py-4 text-right font-mono font-bold text-blue-700 bg-blue-50/30">Rp ${d.saldo.toLocaleString('id-ID')}</td>
@@ -2589,6 +2590,18 @@
             <td class="px-4 py-4 text-right font-mono font-bold text-indigo-600">Rp ${d.shodaqoh.toLocaleString('id-ID')}</td>
             <td class="px-4 py-4 text-right font-mono font-bold text-purple-600">Rp ${d.sewa.toLocaleString('id-ID')}</td>
          </tr>`;
+      }
+
+      // 5. TAMBAHAN: Baris Total Keseluruhan di Paling Bawah
+      if (rHtml !== '') {
+          rHtml += `
+          <tr class="bg-gray-100 border-t-2 border-gray-300">
+             <td colspan="2" class="px-4 py-5 text-right font-extrabold text-gray-700 uppercase tracking-widest text-xs">TOTAL KESELURUHAN:</td>
+             <td class="px-4 py-5 text-right font-mono font-extrabold text-blue-800 bg-blue-100/50">Rp ${totSaldoDigital.toLocaleString('id-ID')}</td>
+             <td class="px-4 py-5 text-right font-mono font-extrabold text-emerald-800 bg-emerald-100/50">Rp ${totOmzet.toLocaleString('id-ID')}</td>
+             <td class="px-4 py-5 text-right font-mono font-extrabold text-indigo-800">Rp ${totShodaqoh.toLocaleString('id-ID')}</td>
+             <td class="px-4 py-5 text-right font-mono font-extrabold text-purple-800">Rp ${totSewa.toLocaleString('id-ID')}</td>
+          </tr>`;
       }
 
       let labelPeriode = filterPeriode === 'hari_ini' ? '(Hari Ini)' : filterPeriode === 'pekan_ini' ? '(7 Hari Terakhir)' : filterPeriode === 'bulan_ini' ? '(Bulan Ini)' : filterPeriode === 'tahun_ini' ? '(Tahun Ini)' : '(Semua Waktu)';
