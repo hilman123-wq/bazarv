@@ -880,13 +880,15 @@
 
       const html = `
         <input type="hidden" id="f-isnew" value="${isNew}">
-        <input type="hidden" id="f-foto-base64" value="${valFoto}">
         <div class="space-y-4">
-          <div class="flex items-center gap-4 mb-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-             <img id="f-foto-preview" src="${previewImg}" class="w-16 h-16 rounded-full object-cover border-2 border-white shadow-md">
-             <div class="flex-1">
-                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Foto Wajah (Opsional)</label>
-                <input type="file" id="f-foto-file" accept="image/*" class="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer" onchange="compressAndPreviewImage(this)">
+          <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4 mb-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+             <img id="f-foto-preview" src="${previewImg}" class="w-20 h-20 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-md flex-shrink-0">
+             <div class="flex-1 w-full space-y-2">
+                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">Foto Santri (Pilih Salah Satu)</label>
+                <!-- Opsi 1: Upload File Fisik -->
+                <input type="file" id="f-foto-file" accept="image/*" class="w-full text-sm text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer" onchange="compressAndPreviewImage(this)">
+                <!-- Opsi 2: Paste Link Google Drive (Bikin Kuota Database Awet!) -->
+                <input type="text" id="f-foto-base64" value="${valFoto}" class="w-full bg-white border border-gray-300 p-2.5 text-xs font-mono rounded-lg outline-none focus:border-blue-500 shadow-sm" placeholder="Atau paste Link Google Drive di sini..." oninput="document.getElementById('f-foto-preview').src = formatFotoUrl(this.value, document.getElementById('f-nama').value)">
              </div>
           </div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">ID Santri</label><input type="text" id="f-id" value="${valId}" class="w-full bg-gray-100 border border-gray-200 font-mono text-gray-600 p-2.5 rounded-lg" ${santri ? 'readonly' : ''}></div>
