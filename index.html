@@ -548,8 +548,8 @@
       RoleMenus[AppState.user.role][index].action();
     }
 
-    // ==========================================
-    // DASHBOARD ADMIN MODERN
+  // ==========================================
+    // DASHBOARD ADMIN MODERN (DIPERBAIKI UNTUK PELANGGAN UMUM)
     // ==========================================
     async function renderDashboardAdmin() {
       document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div></div>';
@@ -573,7 +573,14 @@
           for(let i=0; i<trx.length; i++) { if((trx[i].tanggal || '').includes(hariIni)) trxHariIni++; }
           let recentTrx = [].concat(trx).reverse().slice(0, 6);
           for(let i=0; i<recentTrx.length; i++) {
-              aktivitas.push({ waktu: recentTrx[i].tanggal, teks: 'Santri Jajan di ' + recentTrx[i].id_pedagang, nominal: recentTrx[i].nominal, tipe: 'jajan' });
+              // PERBAIKAN: Cek apakah ini transaksi tunai atau santri biasa
+              let pembeli = recentTrx[i].id_santri === 'UMUM (TUNAI)' ? 'Pelanggan Umum (Cash)' : 'Santri Jajan';
+              aktivitas.push({ 
+                  waktu: recentTrx[i].tanggal, 
+                  teks: pembeli + ' di ' + recentTrx[i].id_pedagang, 
+                  nominal: recentTrx[i].nominal, 
+                  tipe: 'jajan' 
+              });
           }
       }
       if(keg) {
@@ -600,10 +607,21 @@
           for(let i=0; i<slicedAct.length; i++) {
               let a = slicedAct[i];
               let isJajan = a.tipe === 'jajan';
+              // Kita ganti ikon untuk tunai agar berbeda dengan santri (opsional)
+              let ikon = (a.teks.includes('Pelanggan Umum')) ? '💵' : '🛒';
+              let warnaBG = (a.teks.includes('Pelanggan Umum')) ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600';
+              let warnaLabel = (a.teks.includes('Pelanggan Umum')) ? 'text-orange-600' : 'text-emerald-600';
+              
+              if(!isJajan) {
+                  ikon = '📋';
+                  warnaBG = 'bg-indigo-100 text-indigo-600';
+                  warnaLabel = 'text-indigo-600';
+              }
+
               actHTML += '<div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:shadow-md transition-all group">';
-              actHTML += '<div class="flex items-center gap-4"><div class="w-12 h-12 ' + (isJajan ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600') + ' rounded-xl flex items-center justify-center text-xl shadow-sm group-hover:scale-110 transition-transform">' + (isJajan ? '🛒' : '📋') + '</div>';
+              actHTML += '<div class="flex items-center gap-4"><div class="w-12 h-12 ' + warnaBG + ' rounded-xl flex items-center justify-center text-xl shadow-sm group-hover:scale-110 transition-transform">' + ikon + '</div>';
               actHTML += '<div><p class="font-bold text-gray-800 text-sm md:text-base">' + a.teks + '</p><p class="text-xs text-gray-500 font-mono mt-0.5">' + (a.waktu || '-') + '</p></div></div>';
-              actHTML += '<div class="text-right"><p class="font-bold font-mono text-gray-800 text-sm md:text-base">Rp ' + parseInt(a.nominal||0).toLocaleString('id-ID') + '</p><p class="text-[10px] font-bold uppercase tracking-wider ' + (isJajan ? 'text-emerald-600' : 'text-indigo-600') + ' mt-0.5">' + a.tipe + '</p></div>';
+              actHTML += '<div class="text-right"><p class="font-bold font-mono text-gray-800 text-sm md:text-base">Rp ' + parseInt(a.nominal||0).toLocaleString('id-ID') + '</p><p class="text-[10px] font-bold uppercase tracking-wider ' + warnaLabel + ' mt-0.5">' + a.tipe + '</p></div>';
               actHTML += '</div>';
           }
       } else {
