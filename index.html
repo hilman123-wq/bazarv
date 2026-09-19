@@ -2158,47 +2158,163 @@
     }
 
     // ==========================================
-    // DASHBOARD & KASIR PEDAGANG
+    // DASHBOARD & KASIR PEDAGANG (DENGAN LAPORAN)
     // ==========================================
     async function renderDashboardPedagang() {
+      document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div></div>';
+
+      const myId = AppState.user.id_ref || AppState.user.username;
+      
+      // Mengambil data sekaligus
+      const [pData, trxData, pencairanData] = await Promise.all([
+          getTableData('Pedagang'),
+          getTableData('Transaksi'),
+          getTableData('pencairan') 
+      ]);
+
+      let me = null;
+      if(pData) {
+          for(let i=0; i<pData.length; i++) { 
+              if(pData[i].id_pedagang === myId) { me = pData[i]; break; } 
+          }
+      }
+
+      if(!me) {
+          document.getElementById('main-content').innerHTML = '<div class="p-8 text-center text-red-500 font-bold">Data pedagang tidak ditemukan.</div>';
+          return;
+      }
+
+      // Hitung Laporan Khusus Pedagang Ini
+      let totDigital = 0, totTunai = 0, totTarik = 0;
+      let riwayat = [];
+
+      if(trxData) {
+          trxData.forEach(t => {
+              if(t.id_pedagang === myId) {
+                  let nom = parseInt(t.nominal || 0);
+                  let wkt = t.waktu || t.tanggal || '-';
+                  if(t.id_santri === 'UMUM (TUNAI)') {
+                      totTunai += nom;
+                      riwayat.push({ waktu: wkt, jenis: 'Pembeli Umum (Tunai)', nominal: nom, tipe: 'cash' });
+                  } else {
+                      totDigital += nom;
+                      riwayat.push({ waktu: wkt, jenis: 'Santri (Digital)', nominal: nom, tipe: 'digital' });
+                  }
+              }
+          });
+      }
+
+      if(pencairanData) {
+          pencairanData.forEach(p => {
+              if(p.id_pedagang === myId) {
+                  let nom = parseInt(p.nominal || 0);
+                  let wkt = p.waktu || p.tanggal || p.created_at || '-';
+                  totTarik += nom;
+                  riwayat.push({ waktu: wkt, jenis: 'Pencairan Dana ('+(p.status||'Selesai')+')', nominal: nom, tipe: 'tarik' });
+              }
+          });
+      }
+
+      // Balik urutan agar transaksi terbaru di atas
+      riwayat = riwayat.reverse();
+      
+      let htmlRiwayat = '';
+      if(riwayat.length === 0) {
+          htmlRiwayat = '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Belum ada transaksi di toko Anda.</td></tr>';
+      } else {
+          // Batasi 50 transaksi terakhir agar HP tidak berat
+          let batas = riwayat.length > 50 ? 50 : riwayat.length;
+          for(let i=0; i<batas; i++) {
+              let r = riwayat[i];
+              let warnaTeks = r.tipe === 'tarik' ? 'text-red-600' : (r.tipe === 'cash' ? 'text-orange-600' : 'text-indigo-600');
+              let simbol = r.tipe === 'tarik' ? '-' : '+';
+              let badge = r.tipe === 'tarik' ? '<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold">DICAIRKAN</span>' : (r.tipe === 'cash' ? '<span class="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[10px] font-bold">CASH FISIK</span>' : '<span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold">DIGITAL</span>');
+
+              htmlRiwayat += `
+              <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <td class="px-4 py-3 text-[11px] text-gray-500 whitespace-nowrap">${r.waktu}</td>
+                  <td class="px-4 py-3">
+                      <div class="font-bold text-gray-800 text-sm">${r.jenis}</div>
+                      <div class="mt-1">${badge}</div>
+                  </td>
+                  <td class="px-4 py-3 text-right font-mono font-bold ${warnaTeks}">
+                      ${simbol} Rp ${r.nominal.toLocaleString('id-ID')}
+                  </td>
+              </tr>`;
+          }
+      }
+
+      AppState.mySaldo = parseInt(me.saldo||0);
+      let btnKasir = '';
+      if(me.status_aktif !== 'Libur') {
+         btnKasir = '<button onclick="RoleMenus.pedagang[0].action()" class="bg-white text-emerald-700 px-6 py-3 rounded-xl font-bold shadow-lg">🛒 Buka Kasir</button><button onclick="RoleMenus.pedagang[1].action()" class="bg-emerald-800 text-white px-6 py-3 rounded-xl font-bold border border-emerald-500/50 hover:bg-emerald-700 transition-colors">Tarik Dana Tunai</button>';
+      } else {
+         btnKasir = '<div class="bg-red-500 text-white px-6 py-3 rounded-xl font-bold opacity-90 shadow-lg">🛑 Toko Anda Libur Hari Ini</div><button onclick="RoleMenus.pedagang[1].action()" class="bg-emerald-800 text-white px-6 py-3 rounded-xl font-bold border border-emerald-500/50 hover:bg-emerald-700 transition-colors">Tarik Dana</button>';
+      }
+
       document.getElementById('main-content').innerHTML = `
         <div class="max-w-4xl mx-auto">
           <h2 class="text-3xl font-extrabold text-gray-800 mb-6">Kios Area Bazar</h2>
-          <div class="bg-amber-50 p-5 border-l-4 border-amber-500 text-amber-800 mb-8 rounded-r-lg"><div class="flex gap-3 items-start"><span class="text-2xl">📢</span><div><h4 class="font-bold text-lg mb-1">Jadwal Penjualan</h4><p class="text-sm">Bazar rutin Jumat. Libur saat libur pondok.</p></div></div></div>
           
+          <!-- KOTAK SALDO UTAMA -->
           <div class="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 rounded-3xl shadow-xl text-center text-white relative overflow-hidden mb-6">
-             <p class="text-emerald-100 font-medium tracking-widest uppercase text-sm mb-2 relative z-10">Total Omset Digital</p>
-             <h1 class="text-6xl font-extrabold mb-6 relative z-10" id="d-saldo">...</h1>
-             <div id="action-buttons-pedagang" class="flex justify-center gap-4 relative z-10"></div>
+             <p class="text-emerald-100 font-medium tracking-widest uppercase text-sm mb-2 relative z-10">Saldo Digital (Siap Cair)</p>
+             <h1 class="text-6xl font-extrabold mb-6 relative z-10"><span class="text-3xl font-medium align-top">Rp</span> ${AppState.mySaldo.toLocaleString('id-ID')}</h1>
+             <div id="action-buttons-pedagang" class="flex justify-center gap-4 relative z-10">
+                ${btnKasir}
+             </div>
           </div>
 
-          <!-- KOTAK INPUT TRANSAKSI TUNAI (PEMBELI UMUM) -->
-          <div class="bg-white border-2 border-indigo-100 p-6 rounded-3xl shadow-sm">
+          <!-- KOTAK LAPORAN 3 KOLOM -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+             <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col justify-center items-center text-center">
+                 <p class="text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-1">Total Pendapatan Digital</p>
+                 <p class="text-2xl font-black text-indigo-700">Rp ${totDigital.toLocaleString('id-ID')}</p>
+             </div>
+             <div class="bg-orange-50 border border-orange-100 p-4 rounded-2xl flex flex-col justify-center items-center text-center">
+                 <p class="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Pendapatan Cash</p>
+                 <p class="text-2xl font-black text-orange-700">Rp ${totTunai.toLocaleString('id-ID')}</p>
+             </div>
+             <div class="bg-red-50 border border-red-100 p-4 rounded-2xl flex flex-col justify-center items-center text-center">
+                 <p class="text-[10px] text-red-500 font-bold uppercase tracking-wider mb-1">Total Uang Ditarik (Cair)</p>
+                 <p class="text-2xl font-black text-red-700">Rp ${totTarik.toLocaleString('id-ID')}</p>
+             </div>
+          </div>
+
+          <!-- KOTAK INPUT TRANSAKSI TUNAI -->
+          <div class="bg-white border-2 border-orange-100 p-6 rounded-3xl shadow-sm mb-8">
              <h3 class="font-extrabold text-gray-800 mb-2 flex items-center gap-2"><span>💵</span> Catat Pembeli Umum (Uang Tunai)</h3>
-             <p class="text-sm text-gray-500 mb-4">Catat pemasukan dari pembeli non-santri. Omzet akan tercatat di laporan Viewer, tapi tidak menambah saldo digital Anda.</p>
+             <p class="text-sm text-gray-500 mb-4">Catat pemasukan tunai dari pembeli non-santri agar tercatat di omzet. Ini <span class="font-bold text-red-500">tidak akan</span> menambah saldo karena uang fisik langsung Anda pegang.</p>
              <div class="flex flex-col sm:flex-row gap-3">
-                 <input type="number" id="nom-tunai" placeholder="Ketik Nominal (Misal: 15000)" class="flex-1 p-4 rounded-xl border-2 border-indigo-100 focus:border-indigo-500 outline-none font-bold text-indigo-900 bg-indigo-50/30">
-                 <button onclick="submitJajanTunai()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-xl font-extrabold transition-colors shadow-lg">SIMPAN</button>
+                 <input type="number" id="nom-tunai" placeholder="Ketik Nominal (Misal: 15000)" class="flex-1 p-4 rounded-xl border-2 border-orange-100 focus:border-orange-500 outline-none font-bold text-orange-900 bg-orange-50/30">
+                 <button onclick="submitJajanTunai()" class="bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-xl font-extrabold transition-colors shadow-lg">SIMPAN CASH</button>
+             </div>
+          </div>
+
+          <!-- TABEL RIWAYAT TRANSAKSI TOKO -->
+          <div class="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden mb-10">
+             <div class="p-5 border-b bg-gray-50 flex justify-between items-center">
+                 <h3 class="font-bold text-gray-700">Riwayat Toko Anda (50 Transaksi Terakhir)</h3>
+                 <button onclick="renderDashboardPedagang()" class="text-xs font-bold text-blue-600 bg-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-200">Segarkan</button>
+             </div>
+             <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+                 <table class="w-full text-left whitespace-nowrap">
+                     <thead class="bg-white border-b border-gray-200 text-gray-400 uppercase text-[10px] font-bold sticky top-0 z-10">
+                         <tr>
+                             <th class="px-4 py-3">Waktu</th>
+                             <th class="px-4 py-3">Keterangan</th>
+                             <th class="px-4 py-3 text-right">Nominal</th>
+                         </tr>
+                     </thead>
+                     <tbody class="divide-y divide-gray-50">
+                         ${htmlRiwayat}
+                     </tbody>
+                 </table>
              </div>
           </div>
 
         </div>
       `;
-      const pData = await getTableData('Pedagang');
-      if(pData) {
-        let me = null;
-        for(let i=0; i<pData.length; i++) { if(pData[i].id_pedagang === AppState.user.id_ref) { me = pData[i]; break; } }
-        if(me) {
-           document.getElementById('d-saldo').innerHTML = '<span class="text-3xl font-medium align-top">Rp</span> ' + parseInt(me.saldo||0).toLocaleString('id-ID');
-           AppState.mySaldo = parseInt(me.saldo||0);
-           const btn = document.getElementById('action-buttons-pedagang');
-           if(me.status_aktif !== 'Libur') {
-             btn.innerHTML = '<button onclick="RoleMenus.pedagang[0].action()" class="bg-white text-emerald-700 px-6 py-3 rounded-xl font-bold shadow-lg">🛒 Buka Kasir</button><button onclick="RoleMenus.pedagang[1].action()" class="bg-emerald-800 text-white px-6 py-3 rounded-xl font-bold border border-emerald-500/50 hover:bg-emerald-700 transition-colors">Tarik Dana Tunai</button>';
-           } else {
-             btn.innerHTML = '<div class="bg-red-500 text-white px-6 py-3 rounded-xl font-bold opacity-90 shadow-lg">🛑 Toko Anda Libur Hari Ini</div><button onclick="RoleMenus.pedagang[1].action()" class="bg-emerald-800 text-white px-6 py-3 rounded-xl font-bold border border-emerald-500/50 hover:bg-emerald-700 transition-colors">Tarik Dana</button>';
-           }
-        }
-      }
     }
 
     async function renderInputJajan() {
