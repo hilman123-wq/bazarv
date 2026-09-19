@@ -2427,6 +2427,9 @@
       }
     }
 
+    // ==========================================
+    // DASHBOARD VIEWER (PEMANTAUAN BAZAR - FILTER WAKTU)
+    // ==========================================
     async function renderDashboardViewer(filterPeriode = 'hari_ini') {
       document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div></div>';
 
@@ -2435,56 +2438,68 @@
       ]);
 
       const mapPdg = {};
-      if(pdgData) pdgData.forEach(p => mapPdg[p.id_pedagang] = p.nama);
+      const rekap = {};
 
-      // Mesin Pengecek Waktu (Untuk menyortir data berdasarkan filter yang dipilih)
+      // 1. Ambil data dasar Pedagang (Termasuk SALDO SAAT INI)
+      if(pdgData) {
+          pdgData.forEach(p => {
+             mapPdg[p.id_pedagang] = p.nama;
+             rekap[p.id_pedagang] = { 
+                 nama: p.nama, 
+                 saldo: parseInt(p.saldo || 0), // Menarik Saldo Digital
+                 omzet: 0, 
+                 shodaqoh: 0, 
+                 sewa: 0 
+             };
+          });
+      }
+
+      // Mesin Pengecek Waktu (Sudah Diperbaiki)
       let today = new Date();
-      today.setHours(0,0,0,0); // Set ke jam 00:00 hari ini
+      today.setHours(0,0,0,0); 
 
       function cekPeriode(strWaktu) {
           if(filterPeriode === 'semua') return true;
-          if(!strWaktu) return false;
+          if(!strWaktu || strWaktu === '-') return false;
           
           let dateStr = strWaktu.split(',')[0].trim();
-          let p = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
-          if(p.length < 3) return false;
+          let trxDate;
           
-          let trxDate = new Date(p[2], p[1]-1, p[0]);
-          if (trxDate.toString() === 'Invalid Date') return false;
+          if (dateStr.includes('/')) {
+              let p = dateStr.split('/');
+              if(p.length === 3) trxDate = new Date(p[2], p[1]-1, p[0]); // Format DD/MM/YYYY
+          } else if (dateStr.includes('-')) {
+              let p = dateStr.split('-');
+              if(p.length === 3) trxDate = new Date(p[0], p[1]-1, p[2]); // Format YYYY-MM-DD
+          }
+          
+          if (!trxDate || trxDate.toString() === 'Invalid Date') return false;
 
-          if(filterPeriode === 'hari_ini') {
-              return trxDate.getTime() === today.getTime();
-          } else if(filterPeriode === 'pekan_ini') {
+          if(filterPeriode === 'hari_ini') return trxDate.getTime() === today.getTime();
+          if(filterPeriode === 'pekan_ini') {
               let diff = (today.getTime() - trxDate.getTime()) / (1000 * 3600 * 24);
               return diff >= 0 && diff <= 7;
-          } else if(filterPeriode === 'bulan_ini') {
-              return trxDate.getMonth() === today.getMonth() && trxDate.getFullYear() === today.getFullYear();
-          } else if(filterPeriode === 'tahun_ini') {
-              return trxDate.getFullYear() === today.getFullYear();
           }
+          if(filterPeriode === 'bulan_ini') return trxDate.getMonth() === today.getMonth() && trxDate.getFullYear() === today.getFullYear();
+          if(filterPeriode === 'tahun_ini') return trxDate.getFullYear() === today.getFullYear();
           return true;
       }
 
-      const rekap = {};
-      if(pdgData) pdgData.forEach(p => {
-         rekap[p.id_pedagang] = { nama: p.nama, omzet: 0, shodaqoh: 0, sewa: 0 };
-      });
-
-      // Kalkulasi Omzet Jajan sesuai filter
+      // 2. Kalkulasi Omzet Jajan sesuai filter
       if(trxData) {
          trxData.forEach(t => {
              if(cekPeriode(t.waktu || t.tanggal)) {
-                 if(!rekap[t.id_pedagang]) rekap[t.id_pedagang] = { nama: mapPdg[t.id_pedagang] || t.id_pedagang, omzet: 0, shodaqoh: 0, sewa: 0 };
+                 if(!rekap[t.id_pedagang]) rekap[t.id_pedagang] = { nama: mapPdg[t.id_pedagang] || t.id_pedagang, saldo: 0, omzet: 0, shodaqoh: 0, sewa: 0 };
                  rekap[t.id_pedagang].omzet += parseInt(t.nominal || 0);
              }
          });
       }
 
-      // Kalkulasi Setoran sesuai filter
+      // 3. Kalkulasi Setoran sesuai filter
       if(setoranData) {
          setoranData.forEach(s => {
              if(cekPeriode(s.waktu || s.tanggal)) {
-                 if(!rekap[s.id_pedagang]) rekap[s.id_pedagang] = { nama: mapPdg[s.id_pedagang] || s.nama_pedagang, omzet: 0, shodaqoh: 0, sewa: 0 };
+                 if(!rekap[s.id_pedagang]) rekap[s.id_pedagang] = { nama: mapPdg[s.id_pedagang] || s.nama_pedagang, saldo: 0, omzet: 0, shodaqoh: 0, sewa: 0 };
                  const nom = parseInt(s.nominal || 0);
                  if(s.jenis === 'Shodaqoh') rekap[s.id_pedagang].shodaqoh += nom;
                  if(s.jenis === 'Sewa Tenda') rekap[s.id_pedagang].sewa += nom;
@@ -2495,26 +2510,33 @@
       let rHtml = '';
       let totOmzet = 0, totShodaqoh = 0, totSewa = 0;
 
+      // 4. Susun Baris Tabel
       for (const id in rekap) {
          let d = rekap[id];
          totOmzet += d.omzet;
          totShodaqoh += d.shodaqoh;
          totSewa += d.sewa;
 
-         rHtml += '<tr class="hover:bg-blue-50/50 transition-colors"><td class="px-4 py-4 font-mono text-sm text-gray-500">' + id + '</td><td class="px-4 py-4 font-bold text-gray-800">' + d.nama + '</td><td class="px-4 py-4 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30">Rp ' + d.omzet.toLocaleString('id-ID') + '</td><td class="px-4 py-4 text-right font-mono font-bold text-indigo-600">Rp ' + d.shodaqoh.toLocaleString('id-ID') + '</td><td class="px-4 py-4 text-right font-mono font-bold text-purple-600">Rp ' + d.sewa.toLocaleString('id-ID') + '</td></tr>';
+         rHtml += `
+         <tr class="hover:bg-blue-50/50 transition-colors">
+            <td class="px-4 py-4 font-mono text-sm text-gray-500">${id}</td>
+            <td class="px-4 py-4 font-bold text-gray-800">${d.nama}</td>
+            <td class="px-4 py-4 text-right font-mono font-bold text-blue-700 bg-blue-50/30">Rp ${d.saldo.toLocaleString('id-ID')}</td>
+            <td class="px-4 py-4 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30">Rp ${d.omzet.toLocaleString('id-ID')}</td>
+            <td class="px-4 py-4 text-right font-mono font-bold text-indigo-600">Rp ${d.shodaqoh.toLocaleString('id-ID')}</td>
+            <td class="px-4 py-4 text-right font-mono font-bold text-purple-600">Rp ${d.sewa.toLocaleString('id-ID')}</td>
+         </tr>`;
       }
 
-      // Label dinamis untuk kartu
       let labelPeriode = filterPeriode === 'hari_ini' ? '(Hari Ini)' : filterPeriode === 'pekan_ini' ? '(7 Hari Terakhir)' : filterPeriode === 'bulan_ini' ? '(Bulan Ini)' : filterPeriode === 'tahun_ini' ? '(Tahun Ini)' : '(Semua Waktu)';
 
       let html = `
         <div class="max-w-6xl mx-auto mt-2">
           
-          <!-- Header & Filter -->
           <div class="mb-8 border-b-2 border-blue-500 pb-4 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
               <div>
-                 <h2 class="text-3xl font-extrabold text-gray-800">Laporan Pemantauan Khusus</h2>
-                 <p class="text-gray-500 mt-1">Status Omzet Jajan & Setoran Mitra berdasarkan filter waktu.</p>
+                 <h2 class="text-3xl font-extrabold text-gray-800">Laporan Rincian Bazar</h2>
+                 <p class="text-gray-500 mt-1">Pemantauan saldo dompet pedagang, omzet, dan rincian setoran.</p>
               </div>
               <div>
                  <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Pilih Periode Waktu</label>
@@ -2556,13 +2578,14 @@
                    <tr>
                      <th class="px-4 py-4">ID</th>
                      <th class="px-4 py-4">Nama Toko</th>
+                     <th class="px-4 py-4 text-right bg-blue-50/30 text-blue-700">Saldo Digital</th>
                      <th class="px-4 py-4 text-right bg-emerald-50/50">Omzet ${labelPeriode}</th>
                      <th class="px-4 py-4 text-right">Total Shodaqoh</th>
                      <th class="px-4 py-4 text-right">Total Sewa Tenda</th>
                    </tr>
                  </thead>
                  <tbody class="divide-y divide-gray-100">
-                   ${rHtml || '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Belum ada data untuk periode ini.</td></tr>'}
+                   ${rHtml || '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Belum ada data untuk periode ini.</td></tr>'}
                  </tbody>
                </table>
              </div>
@@ -2571,7 +2594,7 @@
       `;
       document.getElementById('main-content').innerHTML = html;
     }
-
+    
     // ==========================================
     // MESIN DOWNLOAD GAMBAR ID CARD
     // ==========================================
