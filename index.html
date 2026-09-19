@@ -1018,42 +1018,103 @@
     }
 
     // ==========================================
-    // MASTER PEDAGANG
+    // MASTER PEDAGANG (KEBAL ERROR & AUTO-REFRESH)
     // ==========================================
     async function renderMasterPedagang() {
+      document.getElementById('main-content').innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div></div>';
+
+      // 1. Kita pecah pemanggilannya agar jika tabel 'pencairan' belum ada, aplikasi tidak mati
+      let data = await getTableData('Pedagang');
+      let trxData = await getTableData('Transaksi');
+      
+      let pencairanData = null;
+      try {
+          pencairanData = await getTableData('pencairan');
+      } catch (err) {
+          console.warn("Tabel pencairan mungkin belum ada: ", err);
+      }
+
+      // 2. Kumpulkan Data Transaksi & Pencairan ke dalam Memori
+      const mapDigital = {};
+      const mapTunai = {};
+      const mapTarik = {};
+
+      if (trxData && trxData.length > 0) {
+          trxData.forEach(t => {
+              let pId = t.id_pedagang;
+              let nom = parseInt(t.nominal || 0);
+              if (t.id_santri === 'UMUM (TUNAI)') {
+                  mapTunai[pId] = (mapTunai[pId] || 0) + nom;
+              } else {
+                  mapDigital[pId] = (mapDigital[pId] || 0) + nom;
+              }
+          });
+      }
+
+      if (pencairanData && pencairanData.length > 0) {
+          pencairanData.forEach(p => {
+              let pId = p.id_pedagang;
+              let nom = parseInt(p.nominal || 0);
+              mapTarik[pId] = (mapTarik[pId] || 0) + nom;
+          });
+      }
+
       document.getElementById('main-content').innerHTML = `
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-           <div><h2 class="text-3xl font-extrabold text-gray-800 tracking-tight">Kemitraan Pedagang</h2></div>
-           <button onclick="openModalPedagang()" class="bg-emerald-600 text-white px-5 py-2.5 rounded-lg">➕ Mitra Pedagang Baru</button>
+           <div><h2 class="text-3xl font-extrabold text-gray-800 tracking-tight">Kemitraan Pedagang</h2><p class="text-gray-500 mt-1">Manajemen mitra dan pemantauan riwayat omzet keseluruhan.</p></div>
+           <div class="flex gap-2">
+              <button onclick="clearCache('Transaksi'); clearCache('Pedagang'); renderMasterPedagang();" class="bg-blue-100 text-blue-700 px-4 py-2.5 rounded-lg shadow-sm font-bold hover:bg-blue-200 transition-colors">🔄 Segarkan</button>
+              <button onclick="openModalPedagang()" class="bg-emerald-600 text-white px-5 py-2.5 rounded-lg shadow-md font-bold hover:bg-emerald-700 transition-colors">➕ Mitra Pedagang Baru</button>
+           </div>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
            <div class="overflow-x-auto">
              <table class="w-full text-left whitespace-nowrap">
-               <thead class="bg-gray-50 border-b text-gray-600 uppercase text-xs font-bold">
-                 <tr><th class="px-6 py-4">ID Pedagang</th><th class="px-6 py-4">Nama Toko</th><th class="px-6 py-4">Jenis Dagangan</th><th class="px-6 py-4 text-right">Saldo Terkumpul</th><th class="px-6 py-4 text-center">Manajemen</th></tr>
+               <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px] font-bold">
+                 <tr>
+                    <th class="px-4 py-4">Toko & Info</th>
+                    <th class="px-4 py-4 text-right text-indigo-700 bg-indigo-50/50">Digital (Santri)</th>
+                    <th class="px-4 py-4 text-right text-orange-700 bg-orange-50/50">Tunai (Umum)</th>
+                    <th class="px-4 py-4 text-right text-red-700 bg-red-50/50">Telah Dicairkan</th>
+                    <th class="px-4 py-4 text-right text-emerald-800">Saldo Saat Ini</th>
+                    <th class="px-4 py-4 text-center">Manajemen</th>
+                 </tr>
                </thead>
-               <tbody id="tb-pedagang" class="divide-y divide-gray-100"><tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Memuat data...</td></tr></tbody>
+               <tbody id="tb-pedagang" class="divide-y divide-gray-100">
+                 <tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Memuat data...</td></tr>
+               </tbody>
              </table>
            </div>
         </div>
       `;
-      const data = await getTableData('Pedagang');
-      if (data) {
+
+      if (data && data.length > 0) {
         let pHTML = '';
         for(let i=0; i<data.length; i++) {
             let p = data[i];
-            pHTML += '<tr class="hover:bg-gray-50">';
-            pHTML += '<td class="px-6 py-4 font-medium">' + p.id_pedagang + '</td>';
-            pHTML += '<td class="px-6 py-4 font-semibold">' + p.nama + '</td>';
-            pHTML += '<td class="px-6 py-4">' + p.jualan + '</td>';
-            pHTML += '<td class="px-6 py-4 text-right font-mono font-bold text-emerald-600">Rp ' + parseInt(p.saldo||0).toLocaleString('id-ID') + '</td>';
-            pHTML += '<td class="px-6 py-4 text-center space-x-2">';
-            pHTML += '<button onclick="showQRPedagang(\'' + p.id_pedagang + '\')" class="bg-gray-100 px-3 py-1.5 rounded text-sm font-medium">🖨️ QR</button> ';
-            pHTML += '<button onclick="openModalPedagang(\'' + p.id_pedagang + '\')" class="text-blue-600 bg-blue-50 px-3 py-1.5 rounded text-sm font-medium">Edit</button> ';
-            pHTML += '<button onclick="deletePedagang(\'' + p.id_pedagang + '\')" class="text-red-600 bg-red-50 px-3 py-1.5 rounded text-sm font-medium">Cabut</button>';
-            pHTML += '</td></tr>';
+            let valDigital = mapDigital[p.id_pedagang] || 0;
+            let valTunai = mapTunai[p.id_pedagang] || 0;
+            let valTarik = mapTarik[p.id_pedagang] || 0;
+            let valSaldo = parseInt(p.saldo||0);
+
+            pHTML += '<tr class="hover:bg-gray-50 transition-colors">';
+            pHTML += `<td class="px-4 py-3">
+                        <div class="font-extrabold text-gray-800 text-sm">${p.nama}</div>
+                        <div class="text-[10px] font-mono text-gray-400 mt-0.5 tracking-wider">${p.id_pedagang} • ${p.jualan || '-'}</div>
+                      </td>`;
+            pHTML += '<td class="px-4 py-3 text-right font-mono font-bold text-indigo-600">Rp ' + valDigital.toLocaleString('id-ID') + '</td>';
+            pHTML += '<td class="px-4 py-3 text-right font-mono font-bold text-orange-600">Rp ' + valTunai.toLocaleString('id-ID') + '</td>';
+            pHTML += '<td class="px-4 py-3 text-right font-mono font-bold text-red-600">Rp ' + valTarik.toLocaleString('id-ID') + '</td>';
+            pHTML += '<td class="px-4 py-3 text-right font-mono font-extrabold text-emerald-700 bg-emerald-50/30">Rp ' + valSaldo.toLocaleString('id-ID') + '</td>';
+            pHTML += `<td class="px-4 py-3 text-center space-x-1">
+                        <button onclick="showQRPedagang('${p.id_pedagang}')" class="bg-gray-100 px-3 py-1.5 rounded text-sm font-medium hover:bg-gray-200 transition-colors" title="Cetak QR">🖨️</button> 
+                        <button onclick="openModalPedagang('${p.id_pedagang}')" class="text-blue-600 bg-blue-50 px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-100 transition-colors">Edit</button> 
+                        <button onclick="deletePedagang('${p.id_pedagang}')" class="text-red-600 bg-red-50 px-3 py-1.5 rounded text-sm font-medium hover:bg-red-100 transition-colors">Cabut</button>
+                      </td></tr>`;
         }
-        document.getElementById('tb-pedagang').innerHTML = pHTML || '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Belum ada mitra pedagang.</td></tr>';
+        document.getElementById('tb-pedagang').innerHTML = pHTML;
+      } else {
+        document.getElementById('tb-pedagang').innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Belum ada mitra pedagang.</td></tr>';
       }
     }
 
