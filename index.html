@@ -137,6 +137,23 @@
             }
             if(!silent) hideLoading(); return mapped;
 
+            case 'catat_kehadiran':
+            let resHadir;
+            // Cek apakah payload berupa banyak data (array) atau satu data
+            if (Array.isArray(payload)) {
+                resHadir = await supabaseClient.from('kehadiran').insert(payload);
+            } else {
+                // Tambahkan stempel waktu otomatis jika belum ada
+                if(!payload.waktu && !payload.tanggal) {
+                    payload.waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+                }
+                resHadir = await supabaseClient.from('kehadiran').insert([payload]);
+            }
+            
+            if (resHadir.error) throw new Error("Gagal mencatat kehadiran: " + resHadir.error.message);
+            if (!silent) hideLoading(); 
+            return true;
+
           case 'save_santri':
             if(payload.is_new) {
                 res = await supabaseClient.from('santri').insert([{
