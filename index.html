@@ -2401,7 +2401,6 @@
         confirmAction('Catat transaksi tunai (pembeli umum) sebesar <b>Rp ' + parseInt(nom).toLocaleString('id-ID') + '</b>? <br><br><i class="text-xs text-gray-500">Catatan: Ini akan menambah laporan Omzet, namun tidak menambah Saldo Digital karena uang fisik sudah Anda terima.</i>', async function() {
             
             const res = await fetchAPI('jajan_tunai', { 
-                // PERBAIKAN: Mengambil ID asli pedagang
                 id_pedagang: AppState.user.id_ref || AppState.user.username, 
                 nominal: nom 
             });
@@ -2410,8 +2409,13 @@
                 showToast('Penjualan tunai berhasil dicatat!');
                 nomInput.value = ''; // Kosongkan kolom setelah sukses
                 
-                // Segarkan memori lokal agar datanya langsung muncul
+                // 1. Bersihkan ingatan lama di aplikasi
                 clearCache('Transaksi');
+                
+                // 2. PERINTAH BARU: Otomatis muat ulang layar Dasbor Pedagang!
+                if(typeof renderDashboardPedagang === 'function') {
+                    renderDashboardPedagang();
+                }
             }
         });
     }
