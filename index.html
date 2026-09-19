@@ -2271,7 +2271,11 @@
       let me = null;
       if(pData) {
           for(let i=0; i<pData.length; i++) { 
-              if(pData[i].id_pedagang === myId) { me = pData[i]; break; } 
+              // PERBAIKAN: Mengabaikan huruf besar/kecil agar selalu cocok
+              if(String(pData[i].id_pedagang).toUpperCase() === String(myId).toUpperCase()) { 
+                  me = pData[i]; 
+                  break; 
+              } 
           }
       }
 
