@@ -517,7 +517,6 @@
     function logout() { AppState.user = null; renderLogin(); }
 
     const RoleMenus = {
-      const RoleMenus = {
       admin: [
         { id: 'dashboard_admin', icon: '🏠', label: 'Dashboard Utama', action: renderDashboardAdmin },
         { id: 'jadwal_pedagang', icon: '📅', label: 'Jadwal Rolling', action: renderJadwalPedagang },
@@ -567,7 +566,6 @@
           <aside class="w-72 bg-gray-900 text-gray-300 flex flex-col shadow-2xl transition-transform duration-300 transform md:translate-x-0 -translate-x-full absolute md:relative z-30 h-full" id="sidebar">
             <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
               <div class="flex items-center gap-3">
-                 <!-- LOGO BARU E-SANTRI -->
                  <div class="bg-gradient-to-tr from-emerald-500 to-teal-400 p-2 rounded-xl shadow-lg ring-2 ring-emerald-500/30">
                     <span class="text-white text-lg leading-none">💳</span>
                  </div>
@@ -609,6 +607,27 @@
           </div>
         </div>
       `;
+      
+      const safeRole = String(AppState.user.role || '').toLowerCase();
+      const roleMenus = RoleMenus[safeRole] || []; 
+      
+      let navHTML = '';
+      for (let i = 0; i < roleMenus.length; i++) {
+          navHTML += '<button onclick="loadMenu(' + i + ', this)" class="menu-btn w-full flex items-center gap-3 text-left px-4 py-3 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-all">';
+          navHTML += '<span class="text-xl">' + roleMenus[i].icon + '</span><span class="font-medium">' + roleMenus[i].label + '</span></button>';
+      }
+      document.getElementById('sidebar-nav').innerHTML = navHTML;
+      
+      if (safeRole === 'pedagang') { 
+          renderDashboardPedagang(); 
+      } else if (safeRole === 'wali') { 
+          renderDashboardWali(); 
+      } else if (roleMenus.length > 0) { 
+          loadMenu(0, document.querySelector('.menu-btn')); 
+      } else {
+          document.getElementById('main-content').innerHTML = '<div class="p-8 text-center text-red-500 font-bold">Error: Menu untuk role "' + safeRole + '" tidak ditemukan!</div>';
+      }
+    }
       
       // PERBAIKAN: Membaca huruf kecil semua agar tidak error jika ada typo di database
       const safeRole = String(AppState.user.role || '').toLowerCase();
