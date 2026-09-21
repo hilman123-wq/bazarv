@@ -3461,7 +3461,7 @@
 
         try {
             // Memperbarui password di tabel users milik user yang sedang login
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('users')
                 .update({ password: passBaru })
                 .eq('username', AppState.user.username);
