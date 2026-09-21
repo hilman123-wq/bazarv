@@ -1231,7 +1231,7 @@
 
            <!-- Tombol Aksi -->
            <div class="grid grid-cols-2 gap-3 mb-8">
-              <button onclick="showToast('Sistem Top-Up Otomatis segera hadir!', 'info')" class="bg-blue-50 border border-blue-100 hover:bg-blue-100 text-blue-700 py-3 rounded-2xl font-bold transition-colors flex flex-col items-center justify-center gap-1">
+              <button onclick="bukaModalTopup()" class="bg-blue-50 border border-blue-100 hover:bg-blue-100 text-blue-700 py-3 rounded-2xl font-bold transition-colors flex flex-col items-center justify-center gap-1">
                  <span class="text-2xl">💳</span>
                  <span class="text-xs">Isi Saldo</span>
               </button>
@@ -3475,6 +3475,63 @@
             console.error(err);
             alert("❌ Gagal mengganti password. Periksa koneksi internet Anda.");
         }
+    }
+
+    // ==========================================
+    // SISTEM TOP-UP OTOMATIS (FRONTEND)
+    // ==========================================
+    function bukaModalTopup() {
+        let modal = document.getElementById('modal-topup');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'modal-topup';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl transform transition-all animate-fade-in-up">
+                    <div class="bg-gradient-to-r from-blue-600 to-indigo-700 p-5 text-center relative">
+                        <h3 class="text-white font-black text-lg">Isi Saldo Santri</h3>
+                        <p class="text-blue-200 text-xs mt-1">Pembayaran Otomatis 24 Jam</p>
+                        <button onclick="document.getElementById('modal-topup').remove()" class="absolute right-4 top-4 text-white/70 hover:text-white bg-white/10 rounded-full w-8 h-8 flex items-center justify-center font-bold">✖</button>
+                    </div>
+                    <div class="p-6">
+                        <p class="text-sm text-gray-500 mb-3 text-center font-semibold">Pilih Nominal Top-Up:</p>
+                        <div class="grid grid-cols-2 gap-3 mb-5">
+                            <button onclick="setNominalTopup(50000)" class="border-2 border-gray-200 py-2.5 rounded-xl text-gray-600 font-bold hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all">Rp 50.000</button>
+                            <button onclick="setNominalTopup(100000)" class="border-2 border-gray-200 py-2.5 rounded-xl text-gray-600 font-bold hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all">Rp 100.000</button>
+                            <button onclick="setNominalTopup(150000)" class="border-2 border-gray-200 py-2.5 rounded-xl text-gray-600 font-bold hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all">Rp 150.000</button>
+                            <button onclick="setNominalTopup(200000)" class="border-2 border-gray-200 py-2.5 rounded-xl text-gray-600 font-bold hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all">Rp 200.000</button>
+                        </div>
+                        <div class="mb-5">
+                            <label class="text-xs text-gray-500 font-bold ml-1 uppercase tracking-wider">Atau Ketik Nominal Lain:</label>
+                            <div class="relative mt-2">
+                                <span class="absolute left-4 top-3.5 text-gray-500 font-bold">Rp</span>
+                                <input type="number" id="input-nominal-topup" class="w-full p-3.5 pl-12 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-0 outline-none font-black text-xl text-gray-800" placeholder="0">
+                            </div>
+                        </div>
+                        <button onclick="prosesBayarGateway()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2">
+                            <span>Lanjut Pembayaran</span>
+                            <span>➔</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+    }
+
+    function setNominalTopup(angka) {
+        document.getElementById('input-nominal-topup').value = angka;
+    }
+
+    function prosesBayarGateway() {
+        const nominal = document.getElementById('input-nominal-topup').value;
+        if(!nominal || nominal < 10000) {
+            alert("Minimal pengisian saldo adalah Rp 10.000");
+            return;
+        }
+        
+        // Di sinilah nanti kode pemanggilan Midtrans/Tripay akan diletakkan
+        alert("Tahap Frontend Selesai!\n\nJika Payment Gateway sudah aktif, tombol ini akan langsung membuka pop-up pilihan Bank (Virtual Account BSI, BRI, Mandiri, dll) untuk pembayaran sebesar Rp " + parseInt(nominal).toLocaleString('id-ID') + ".");
     }
 
   </script>
