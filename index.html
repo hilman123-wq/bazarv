@@ -628,29 +628,6 @@
           document.getElementById('main-content').innerHTML = '<div class="p-8 text-center text-red-500 font-bold">Error: Menu untuk role "' + safeRole + '" tidak ditemukan!</div>';
       }
     }
-      
-      // PERBAIKAN: Membaca huruf kecil semua agar tidak error jika ada typo di database
-      const safeRole = String(AppState.user.role || '').toLowerCase();
-      const roleMenus = RoleMenus[safeRole] || []; // Jika menu tidak ada, cegah crash
-      
-      let navHTML = '';
-      for (let i = 0; i < roleMenus.length; i++) {
-          navHTML += '<button onclick="loadMenu(' + i + ', this)" class="menu-btn w-full flex items-center gap-3 text-left px-4 py-3 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-all">';
-          navHTML += '<span class="text-xl">' + roleMenus[i].icon + '</span><span class="font-medium">' + roleMenus[i].label + '</span></button>';
-      }
-      document.getElementById('sidebar-nav').innerHTML = navHTML;
-      
-      // PERBAIKAN: Arahkan langsung ke layar yang tepat sesuai peran
-      if (safeRole === 'pedagang') { 
-          renderDashboardPedagang(); 
-      } else if (safeRole === 'wali') { 
-          renderDashboardWali(); 
-      } else if (roleMenus.length > 0) { 
-          loadMenu(0, document.querySelector('.menu-btn')); 
-      } else {
-          document.getElementById('main-content').innerHTML = '<div class="p-8 text-center text-red-500 font-bold">Error: Menu untuk role "' + safeRole + '" tidak ditemukan!</div>';
-      }
-    }
 
     function toggleSidebar() {
       const sb = document.getElementById('sidebar');
