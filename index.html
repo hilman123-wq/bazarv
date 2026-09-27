@@ -301,36 +301,32 @@
             if(pdJ.data.status_aktif !== 'Aktif') throw new Error("Toko sedang Libur");
             if(stJ.data.saldo < parseInt(payload.nominal)) throw new Error("Saldo santri tidak mencukupi");
             
-            // 1. Potong saldo santri & tambah saldo pedagang
             await supabaseClient.from('santri').update({saldo: stJ.data.saldo - parseInt(payload.nominal)}).eq('id_santri', payload.id_santri);
             await supabaseClient.from('pedagang').update({saldo: pdJ.data.saldo + parseInt(payload.nominal)}).eq('id_pedagang', payload.id_pedagang);
             
-            // 2. Simpan Riwayat Jajan (DENGAN ALARM ERROR)
             let resTrx = await supabaseClient.from('transaksi').insert([{
-                id_trx: "TRX"+Date.now(), id_santri: payload.id_santri, 
-                id_pedagang: payload.id_pedagang, nominal: payload.nominal,
+                id_trx: "TRX"+Date.now(), 
+                id_santri: payload.id_santri, 
+                id_pedagang: payload.id_pedagang, 
+                nominal: payload.nominal,
+                item: payload.item || 'Jajan Kantin',
                 waktu: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
             }]);
             
-            // Jika database menolak, aplikasi akan memunculkan layar merah
             if(resTrx.error) throw new Error("Gagal menyimpan riwayat jajan: " + resTrx.error.message);
-            
             if(!silent) hideLoading(); return { sisa_saldo: stJ.data.saldo - parseInt(payload.nominal) };
           
           case 'jajan_tunai':
-            // Mengambil status toko tanpa .single() untuk menghindari Error 406
             let pdJCash = await supabaseClient.from('pedagang').select('status_aktif').eq('id_pedagang', payload.id_pedagang);
-            
-            // Cek apakah data kosong
             if(!pdJCash.data || pdJCash.data.length === 0) throw new Error("Akses Pedagang tidak sah (" + payload.id_pedagang + ")");
             if(pdJCash.data[0].status_aktif !== 'Aktif') throw new Error("Toko sedang Libur");
             
-            // HANYA MENCATAT RIWAYAT (AGAR TERBACA SEBAGAI OMZET)
             let resTrxCash = await supabaseClient.from('transaksi').insert([{
                 id_trx: "CASH" + Date.now(), 
                 id_santri: "UMUM (TUNAI)", 
                 id_pedagang: payload.id_pedagang, 
                 nominal: payload.nominal,
+                item: payload.item || 'Pembelian Tunai',
                 waktu: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
             }]);
             
@@ -1020,7 +1016,7 @@
         // 3. Susun Tabel Jajan
         let htmlJajan = '';
         if(riwayatJajan.length > 0) {
-            riwayatJajan.forEach(t => { htmlJajan += `<tr class="border-b"><td class="py-2 text-xs text-gray-500">${t.waktu||t.tanggal||'-'}</td><td class="py-2 text-sm text-gray-800 font-medium">${mapPdg[t.id_pedagang]||t.id_pedagang}</td><td class="py-2 text-right font-mono font-bold text-orange-600">- Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td></tr>`; });
+            riwayatJajan.forEach(t => { htmlJajan += `<tr class="border-b"><td class="py-2 text-xs text-gray-500">${t.waktu||t.tanggal||'-'}</td><td class="py-2 text-sm text-gray-800"><div class="font-bold text-gray-900">${t.item || 'Jajan Bazar'}</div><div class="text-xs text-gray-500">🏪 ${mapPdg[t.id_pedagang]||t.id_pedagang}</div></td><td class="py-2 text-right font-mono font-bold text-orange-600">- Rp ${parseInt(t.nominal||0).toLocaleString('id-ID')}</td></tr>`; });
         } else { htmlJajan = '<tr><td colspan="3" class="py-4 text-center text-gray-400 text-sm italic">Belum ada riwayat jajan bazar</td></tr>'; }
 
         const printHtml = `
@@ -1173,7 +1169,7 @@
       let aktivitas = [];
       if(topupData) topupData.filter(t => t.id_santri === idAnak).forEach(t => aktivitas.push({ waktu: t.waktu, jenis: 'Uang Masuk', nominal: t.nominal, ikon: '📥', warna: 'text-green-600', bg: 'bg-green-100', detail: t.metode }));
       if(kData) kData.filter(k => k.id_santri === idAnak).forEach(k => aktivitas.push({ waktu: k.waktu||k.tanggal, jenis: 'Kegiatan Pondok', nominal: k.nominal, ikon: '📋', warna: 'text-indigo-600', bg: 'bg-indigo-100', detail: k.kegiatan }));
-      if(tData) tData.filter(t => t.id_santri === idAnak).forEach(t => aktivitas.push({ waktu: t.waktu||t.tanggal, jenis: 'Jajan Kantin', nominal: t.nominal, ikon: '🛒', warna: 'text-orange-600', bg: 'bg-orange-100', detail: mapPdg[t.id_pedagang]||t.id_pedagang }));
+      if(tData) tData.filter(t => t.id_santri === idAnak).forEach(t => aktivitas.push({ waktu: t.waktu||t.tanggal, jenis: '🛒 ' + (t.item || 'Jajan Kantin'), nominal: t.nominal, ikon: '🍱', warna: 'text-orange-600', bg: 'bg-orange-100', detail: 'Toko: ' + (mapPdg[t.id_pedagang]||t.id_pedagang) }));
 
       // Urutkan aktivitas dari yang paling baru
       aktivitas.sort((a, b) => new Date(b.waktu.split(',')[0].split('/').reverse().join('-') + 'T' + b.waktu.split(',')[1].trim().replace(/\./g, ':')) - new Date(a.waktu.split(',')[0].split('/').reverse().join('-') + 'T' + a.waktu.split(',')[1].trim().replace(/\./g, ':')));
@@ -2636,18 +2632,27 @@
     // ==========================================
     // KASIR PINTAR RAMAH LANSIA (PROSES JAJAN)
     // ==========================================
+    // Variabel keranjang belanja untuk mencatat produk apa saja yang dipilih
+    let keranjangJajan = {};
+
     async function renderInputJajan() {
+      keranjangJajan = {};
       document.getElementById('main-content').innerHTML = `
         <div class="max-w-md mx-auto mt-1 pb-10">
           
           <!-- BAGIAN 1: BELANJA PAKAI KARTU SANTRI -->
           <div class="bg-white p-5 rounded-3xl shadow-md border-2 border-emerald-500 mb-6">
-            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
-              <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center text-2xl font-bold">💳</div>
-              <div>
-                <h2 class="text-xl font-black text-gray-800 leading-tight">1. Bayar Pakai Kartu</h2>
-                <p class="text-xs text-gray-500 font-medium">Khusus santri yang membawa kartu</p>
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center text-2xl font-bold">💳</div>
+                <div>
+                  <h2 class="text-xl font-black text-gray-800 leading-tight">1. Bayar Pakai Kartu</h2>
+                  <p class="text-xs text-gray-500 font-medium">Scan kartu lalu klik produk</p>
+                </div>
               </div>
+              <button type="button" onclick="bukaModalAturProduk()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-xs font-extrabold">
+                ⚙️ Atur Menu
+              </button>
             </div>
 
             <!-- PILIHAN CARA CARI SANTRI -->
@@ -2663,7 +2668,7 @@
               </button>
             </div>
 
-            <!-- AREA SCAN KAMERA (Otomatis Terbuka) -->
+            <!-- AREA SCAN KAMERA -->
             <div id="area-mode-scan" class="mb-4">
               <div id="reader-container" class="hidden mb-2 rounded-2xl overflow-hidden border-4 border-emerald-500 relative bg-black min-h-[220px]">
                 <div id="reader" class="w-full bg-black"></div>
@@ -2683,20 +2688,24 @@
               </div>
             </div>
 
-            <!-- KOTAK INFO NAMA & SALDO SANTRI -->
-            <div id="j-info-box" class="mb-4 p-4 rounded-2xl hidden text-base"></div>
+            <!-- KOTAK INFO NAMA SANTRI & PRODUK DAGANGAN (MUNCUL SETELAH SCAN) -->
+            <div id="j-info-box" class="mb-4 hidden"></div>
 
-            <!-- INPUT HARGA BELANJA + TOMBOL ANGKA CEPAT -->
+            <!-- INPUT HARGA BELANJA + RINCIAN BARANG -->
             <div class="bg-gray-50 p-4 rounded-2xl border border-gray-200 mb-4">
-              <label class="block font-extrabold mb-2 text-sm text-gray-800">Langkah B: Masukkan Harga Jajan (Rp)</label>
+              <label class="block font-extrabold mb-1 text-sm text-gray-800">Langkah B: Total & Rincian Jajanan</label>
+              
+              <!-- Kotak Rincian Item yang Dibeli -->
+              <input type="text" id="j-item" class="w-full bg-emerald-50/60 border border-emerald-200 p-2.5 rounded-xl text-xs font-bold text-emerald-900 mb-2" placeholder="Rincian barang (otomatis terisi saat klik produk / ketik manual)">
+
               <input type="number" id="j-nom" class="w-full bg-white border-2 border-gray-300 p-4 rounded-xl text-3xl font-black text-gray-900 mb-3" placeholder="0">
               
-              <p class="text-[11px] font-bold text-gray-500 mb-1.5">Tombol Cepat (Klik untuk menambah harga):</p>
+              <p class="text-[11px] font-bold text-gray-500 mb-1.5">Tombol Tambah Harga Manual:</p>
               <div class="grid grid-cols-4 gap-1.5">
                 <button type="button" onclick="tambahNominalJajan(2000)" class="bg-white border border-gray-300 py-2 rounded-lg font-extrabold text-xs text-gray-700 active:bg-emerald-100">+ 2.000</button>
                 <button type="button" onclick="tambahNominalJajan(5000)" class="bg-white border border-gray-300 py-2 rounded-lg font-extrabold text-xs text-gray-700 active:bg-emerald-100">+ 5.000</button>
                 <button type="button" onclick="tambahNominalJajan(10000)" class="bg-white border border-gray-300 py-2 rounded-lg font-extrabold text-xs text-gray-700 active:bg-emerald-100">+ 10.000</button>
-                <button type="button" onclick="document.getElementById('j-nom').value=''" class="bg-red-50 border border-red-200 py-2 rounded-lg font-extrabold text-xs text-red-600">Hapus</button>
+                <button type="button" onclick="resetKeranjangJajan()" class="bg-red-50 border border-red-200 py-2 rounded-lg font-extrabold text-xs text-red-600">Reset</button>
               </div>
             </div>
 
@@ -2712,7 +2721,7 @@
               <div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center text-xl font-bold">💵</div>
               <div>
                 <h3 class="text-base font-black text-gray-900">2. Catat Pembeli Uang Tunai</h3>
-                <p class="text-xs text-gray-600">Jika pembeli membayar pakai <b>uang kertas/logam</b> (tidak menambah saldo aplikasi karena uang langsung Anda pegang).</p>
+                <p class="text-xs text-gray-600">Jika pembeli membayar pakai <b>uang kertas/logam</b>.</p>
               </div>
             </div>
 
@@ -2732,10 +2741,95 @@
       }, 250);
     }
 
+    // Membaca daftar produk dari kolom 'jualan' milik pedagang
+    function parseProdukPedagang(strJualan) {
+      if (!strJualan) return [];
+      return strJualan.split(',').map(s => s.trim()).filter(Boolean).map(item => {
+        let parts = item.split(':');
+        let nama = parts[0].trim();
+        let harga = parts[1] ? parseInt(parts[1].replace(/\D/g, '')) || 0 : 0;
+        return { nama, harga };
+      });
+    }
+
+    // Saat tombol produk diklik oleh pedagang
+    function pilihProdukJajan(nama, harga) {
+      if (!keranjangJajan[nama]) {
+        keranjangJajan[nama] = { qty: 0, harga: harga };
+      }
+      keranjangJajan[nama].qty += 1;
+
+      if (harga > 0) {
+        const inputNom = document.getElementById('j-nom');
+        inputNom.value = parseInt(inputNom.value || 0) + harga;
+      }
+
+      updateTampilanKeranjang();
+    }
+
+    function updateTampilanKeranjang() {
+      let listTeks = [];
+      for (let nama in keranjangJajan) {
+        let item = keranjangJajan[nama];
+        if (item.qty > 0) {
+          listTeks.push(item.qty > 1 ? `${nama} (${item.qty}x)` : nama);
+        }
+      }
+      const inputItem = document.getElementById('j-item');
+      if (inputItem) inputItem.value = listTeks.join(', ');
+    }
+
+    function resetKeranjangJajan() {
+      keranjangJajan = {};
+      document.getElementById('j-nom').value = '';
+      document.getElementById('j-item').value = '';
+    }
+
     function tambahNominalJajan(nilai) {
       const input = document.getElementById('j-nom');
       const nilaiSekarang = parseInt(input.value || 0);
       input.value = nilaiSekarang + nilai;
+    }
+
+    // Modal bagi pedagang untuk mengatur sendiri produk & harga jualannya
+    async function bukaModalAturProduk() {
+      const pData = await getTableData('Pedagang');
+      const refId = String(AppState.user.id_ref || AppState.user.username || '').trim().toUpperCase();
+      let me = pData ? pData.find(p => String(p.id_pedagang).toUpperCase() === refId) : null;
+      let valJualan = me ? (me.jualan || '') : '';
+
+      const html = `
+        <div class="space-y-4">
+          <div class="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl text-xs text-emerald-900 leading-relaxed">
+            <b>💡 Cara Mengisi Produk & Harga:</b><br>
+            Ketik <b>Nama Produk:Harga</b> lalu pisahkan dengan tanda koma (<b>,</b>).<br>
+            Contoh:<br>
+            <code class="bg-white px-2 py-1 rounded border mt-1 inline-block font-bold text-emerald-700">Nasi Ayam:12000, Es Teh:3000, Gorengan:2000</code>
+          </div>
+          <div>
+            <label class="block text-sm font-extrabold text-gray-700 mb-1">Daftar Produk Dagangan Anda:</label>
+            <textarea id="input-produk-dagangan" rows="4" class="w-full border-2 border-gray-300 p-3 rounded-xl font-bold text-gray-800 focus:border-emerald-500 outline-none" placeholder="Contoh: Bakso:10000, Es Jeruk:4000, Kerupuk:1000">${valJualan}</textarea>
+          </div>
+          <button onclick="simpanProdukDagangan('${me ? me.id_pedagang : refId}')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3.5 rounded-xl shadow-md">
+            💾 SIMPAN MENU DAGANGAN
+          </button>
+        </div>
+      `;
+      openModal('⚙️ Atur Produk & Harga', html);
+    }
+
+    async function simpanProdukDagangan(idPdg) {
+      const teksProduk = document.getElementById('input-produk-dagangan').value.trim();
+      showLoading();
+      const { error } = await supabaseClient.from('pedagang').update({ jualan: teksProduk }).eq('id_pedagang', idPdg);
+      hideLoading();
+      if (error) return showToast('Gagal menyimpan menu: ' + error.message, 'error');
+      clearCache('Pedagang');
+      closeModal();
+      showToast('Daftar produk berhasil diperbarui!');
+      if (document.getElementById('j-id') && document.getElementById('j-id').value) {
+        cekSantriPedagang();
+      }
     }
 
     function switchModeKasir(mode) {
@@ -2748,23 +2842,16 @@
       if (mode === 'scan') {
         tabScan.className = "py-3 px-2 rounded-2xl font-extrabold text-sm border-2 border-emerald-600 bg-emerald-600 text-white shadow-md flex flex-col items-center justify-center gap-1 transition-all";
         tabManual.className = "py-3 px-2 rounded-2xl font-extrabold text-sm border-2 border-gray-200 bg-gray-50 text-gray-600 flex flex-col items-center justify-center gap-1 transition-all";
-        
         areaScan.classList.remove('hidden');
         areaManual.classList.add('hidden');
-
-        if (readerContainer && readerContainer.classList.contains('hidden')) {
-          toggleKamera();
-        }
+        if (readerContainer && readerContainer.classList.contains('hidden')) toggleKamera();
       } else {
         tabManual.className = "py-3 px-2 rounded-2xl font-extrabold text-sm border-2 border-emerald-600 bg-emerald-600 text-white shadow-md flex flex-col items-center justify-center gap-1 transition-all";
         tabScan.className = "py-3 px-2 rounded-2xl font-extrabold text-sm border-2 border-gray-200 bg-gray-50 text-gray-600 flex flex-col items-center justify-center gap-1 transition-all";
-        
         areaManual.classList.remove('hidden');
         areaScan.classList.add('hidden');
-
         if (typeof stopKamera === 'function') stopKamera();
         if (readerContainer) readerContainer.classList.add('hidden');
-
         const inputId = document.getElementById('j-id');
         if (inputId) inputId.focus();
       }
@@ -2773,18 +2860,62 @@
     async function cekSantriPedagang() {
       const q = document.getElementById('j-id').value.trim(); if(!q) return;
       const b = document.getElementById('j-info-box'); b.classList.remove('hidden'); b.innerHTML = '<div class="text-center p-4 font-bold text-gray-500">Mencari Data...</div>';
-      const d = await getTableData('Santri');
+      
+      const [d, pData] = await Promise.all([ getTableData('Santri'), getTableData('Pedagang') ]);
+      
+      // Ambil daftar produk milik pedagang yang sedang login
+      const refId = String(AppState.user.id_ref || AppState.user.username || '').trim().toUpperCase();
+      let me = pData ? pData.find(p => String(p.id_pedagang).toUpperCase() === refId) : null;
+      let daftarProduk = parseProdukPedagang(me ? me.jualan : '');
+
       if(d) {
         let s = null;
         for(let i=0; i<d.length; i++) {
            if(d[i].id_santri.toUpperCase() === q.toUpperCase() || d[i].nama.toLowerCase().includes(q.toLowerCase())) { s = d[i]; break; }
         }
         if(s) {
+           keranjangJajan = {};
            document.getElementById('j-id').value = s.id_santri;
-           b.className = 'mb-4 p-5 rounded-3xl border-2 bg-gradient-to-b from-green-50 to-emerald-100 border-emerald-300 shadow-lg text-center transition-all';
+           
+           // Buat tombol-tombol produk dagangan
+           let produkHTML = '';
+           if (daftarProduk.length > 0) {
+             produkHTML = `<div class="mt-4 pt-3 border-t border-emerald-200 text-left">
+               <p class="text-xs font-extrabold text-emerald-900 uppercase tracking-wider mb-2">🍱 Klik Produk yang Dibeli Santri:</p>
+               <div class="grid grid-cols-2 gap-2">`;
+             daftarProduk.forEach(prod => {
+               let labelHarga = prod.harga > 0 ? `Rp ${prod.harga.toLocaleString('id-ID')}` : 'Ketik Harga';
+               let namaSafe = prod.nama.replace(/'/g, "\\'");
+               produkHTML += `
+                 <button type="button" onclick="pilihProdukJajan('${namaSafe}', ${prod.harga})" class="bg-white hover:bg-emerald-50 active:scale-95 border-2 border-emerald-300 p-2.5 rounded-2xl text-left shadow-sm transition-all flex flex-col justify-between">
+                   <span class="font-extrabold text-gray-800 text-sm leading-tight">${prod.nama}</span>
+                   <span class="text-xs font-black text-emerald-600 mt-1">+ ${labelHarga}</span>
+                 </button>
+               `;
+             });
+             produkHTML += `</div></div>`;
+           } else {
+             produkHTML = `
+               <div class="mt-3 pt-3 border-t border-emerald-200">
+                 <button type="button" onclick="bukaModalAturProduk()" class="w-full bg-white border border-dashed border-emerald-400 text-emerald-700 py-2 rounded-xl text-xs font-bold">
+                   ➕ Belum ada tombol produk. Klik di sini untuk mengatur menu jualan Anda.
+                 </button>
+               </div>`;
+           }
+
+           b.className = 'mb-4 p-4 rounded-3xl border-2 bg-gradient-to-b from-green-50 to-emerald-100 border-emerald-300 shadow-md text-center transition-all';
            let imgUrl = formatFotoUrl(s.foto, s.nama);
-           b.innerHTML = '<img src="' + imgUrl + '" class="w-32 h-40 mx-auto rounded-2xl object-cover border-4 border-white shadow-md mb-3"><div class="text-xl font-black text-gray-800 mb-1 flex justify-center items-center gap-2"><span class="text-emerald-600 text-2xl">✅</span> ' + s.nama + '</div><div class="inline-block bg-white px-5 py-2.5 rounded-2xl shadow-sm border border-emerald-200 mt-2"><p class="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-0.5">Sisa Saldo Kartu</p><p class="text-3xl font-black text-emerald-600">Rp ' + parseInt(s.saldo||0).toLocaleString('id-ID') + '</p></div>';
-           document.getElementById('j-nom').focus();
+           b.innerHTML = `
+             <div class="flex items-center gap-3 bg-white p-3 rounded-2xl border border-emerald-200 shadow-sm text-left">
+               <img src="${imgUrl}" class="w-16 h-16 rounded-xl object-cover border-2 border-emerald-400 shrink-0">
+               <div class="flex-1 min-w-0">
+                 <div class="text-base font-black text-gray-900 truncate">✅ ${s.nama}</div>
+                 <p class="text-[11px] font-bold text-gray-400 uppercase">Sisa Saldo Kartu:</p>
+                 <p class="text-xl font-black text-emerald-600">Rp ${parseInt(s.saldo||0).toLocaleString('id-ID')}</p>
+               </div>
+             </div>
+             ${produkHTML}
+           `;
         } else { 
            b.className = 'mb-4 p-4 rounded-2xl border-2 bg-red-50 border-red-200 text-center'; 
            b.innerHTML = '<div class="text-red-600 font-bold text-lg">❌ Santri tidak ditemukan!</div>'; 
@@ -2794,7 +2925,7 @@
 
     let html5QrCode = null;
     function toggleKamera() {
-      const con = document.getElementById('reader-container'); const btn = document.getElementById('btn-kamera');
+      const con = document.getElementById('reader-container');
       if (html5QrCode && html5QrCode.isScanning) { stopKamera(); return; }
       if (con) con.classList.remove('hidden');
       html5QrCode = new Html5Qrcode("reader");
@@ -2813,12 +2944,34 @@
     }
 
     async function submitJajan() {
-      const i = document.getElementById('j-id').value.trim().toUpperCase(); const n = document.getElementById('j-nom').value;
-      if(!i || !n || n <= 0) return showToast('Data tidak valid', 'error');
-      const res = await fetchAPI('jajan', { id_santri: i, nominal: n, id_pedagang: AppState.user.id_ref || AppState.user.username });
+      const i = document.getElementById('j-id').value.trim().toUpperCase(); 
+      const n = document.getElementById('j-nom').value;
+      const itemDibeli = document.getElementById('j-item') ? document.getElementById('j-item').value.trim() : 'Jajan Kantin';
+
+      if(!i || !n || n <= 0) return showToast('Pilih santri dan masukkan harga belanja!', 'error');
+      
+      const res = await fetchAPI('jajan', { 
+        id_santri: i, 
+        nominal: n, 
+        item: itemDibeli || 'Jajan Kantin',
+        id_pedagang: AppState.user.id_ref || AppState.user.username 
+      });
+      
       if(res) {
         clearCache('Santri'); clearCache('Pedagang'); clearCache('Transaksi');
-        openModal('Nota', '<div class="text-center p-4"><div class="text-6xl mb-4">✅</div><h3 class="text-2xl font-bold text-green-600 mb-2">LUNAS</h3><p class="text-gray-600 mb-6">Pembayaran <b>Rp ' + parseInt(n).toLocaleString('id-ID') + '</b> dari <b>' + i + '</b> berhasil.</p><div class="bg-gray-100 p-3 rounded-lg"><p class="text-xs uppercase">Sisa Saldo Pembeli</p><p class="text-xl font-bold">Rp ' + parseInt(res.sisa_saldo).toLocaleString('id-ID') + '</p></div><button onclick="closeModal(); renderInputJajan();" class="mt-6 w-full bg-emerald-600 text-white font-bold py-3.5 rounded-xl">Transaksi Berikutnya</button></div>');
+        openModal('Nota Pembelian', `
+          <div class="text-center p-4">
+            <div class="text-6xl mb-3">✅</div>
+            <h3 class="text-2xl font-black text-green-600 mb-1">PEMBAYARAN LUNAS</h3>
+            <p class="text-sm font-bold text-emerald-800 bg-emerald-50 py-1.5 px-3 rounded-lg inline-block mb-3">${itemDibeli || 'Jajan Kantin'}</p>
+            <p class="text-gray-600 mb-5">Sebesar <b>Rp ${parseInt(n).toLocaleString('id-ID')}</b> dari kartu <b>${i}</b></p>
+            <div class="bg-gray-100 p-3 rounded-xl">
+              <p class="text-xs uppercase font-bold text-gray-500">Sisa Saldo Santri</p>
+              <p class="text-2xl font-black text-gray-800">Rp ${parseInt(res.sisa_saldo).toLocaleString('id-ID')}</p>
+            </div>
+            <button onclick="closeModal(); renderInputJajan();" class="mt-6 w-full bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg">Lanjut Pembeli Berikutnya</button>
+          </div>
+        `);
       }
     }
 
