@@ -661,19 +661,6 @@
       }
     }
 
-      if(btnEl) {
-        const allBtns = document.querySelectorAll('.menu-btn');
-        for(let i = 0; i < allBtns.length; i++) {
-            allBtns[i].classList.remove('bg-gray-800', 'text-white', 'shadow-inner');
-            allBtns[i].classList.add('text-gray-400');
-        }
-        btnEl.classList.remove('text-gray-400');
-        btnEl.classList.add('bg-gray-800', 'text-white', 'shadow-inner');
-      }
-      
-      if(window.innerWidth < 768) toggleSidebar();
-      RoleMenus[AppState.user.role][index].action();
-    
 
   // ==========================================
     // DASHBOARD ADMIN MODERN (DIPERBAIKI UNTUK PELANGGAN UMUM)
