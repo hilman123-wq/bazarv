@@ -538,7 +538,8 @@
         { id: 'laporan_bendahara', icon: '📉', label: 'Laporan Bazar', action: renderLaporanGlobal },
         { id: 'cash_flow', icon: '💰', label: 'Buku Kas Operasional', action: renderCashFlow }
       ],
-      pedagang: [
+     pedagang: [
+        { id: 'dashboard_pedagang', icon: '🏪', label: 'Dashboard', action: renderDashboardPedagang },
         { id: 'jajan_input', icon: '🛒', label: 'Proses Jajan', action: renderInputJajan },
         { id: 'ajukan_wd', icon: '💰', label: 'Ajukan Pencairan', action: renderAjukanWD }
       ],
@@ -632,11 +633,7 @@
       }
       document.getElementById('bottom-nav').innerHTML = navHTML;
       
-      if (safeRole === 'pedagang') { 
-          renderDashboardPedagang(); 
-      } else if (safeRole === 'wali') { 
-          renderDashboardWali(); 
-      } else if (roleMenus.length > 0) { 
+      if (roleMenus.length > 0) { 
           loadMenu(0, document.querySelector('.menu-btn')); 
       } else {
           document.getElementById('main-content').innerHTML = '<div class="p-8 text-center text-red-500 font-bold">Error: Menu untuk role "' + safeRole + '" tidak ditemukan!</div>';
