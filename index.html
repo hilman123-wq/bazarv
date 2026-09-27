@@ -643,12 +643,7 @@
       }
     }
 
-    function toggleSidebar() {
-      const sb = document.getElementById('sidebar');
-      const overlay = document.getElementById('sidebar-overlay');
-      if(sb.classList.contains('-translate-x-full')) { sb.classList.remove('-translate-x-full'); overlay.classList.remove('hidden'); } 
-      else { sb.classList.add('-translate-x-full'); overlay.classList.add('hidden'); }
-    }
+    function toggleSidebar() {}
 
     function loadMenu(index, btnElement) {
       document.querySelectorAll('.menu-btn').forEach(btn => {
