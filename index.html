@@ -2649,26 +2649,98 @@
       `;
     }
 
-    async function renderInputJajan() {
+   async function renderInputJajan() {
       document.getElementById('main-content').innerHTML = `
-        <div class="max-w-md mx-auto mt-4">
-          <div class="text-center mb-6"><div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3">🛒</div><h2 class="text-2xl font-extrabold">Kasir Pintar</h2><p class="text-sm text-gray-500">Potong saldo santri</p></div>
-          <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <div class="mb-4">
-               <button type="button" id="btn-kamera" onclick="toggleKamera()" class="w-full bg-indigo-50 text-indigo-700 font-bold py-3 rounded-xl border border-indigo-200">📷 Buka Scanner QR</button>
-               <div id="reader-container" class="hidden mt-3 rounded-xl overflow-hidden border-2 border-indigo-500 relative"><div id="reader" class="w-full bg-black"></div></div>
-            </div>
-            <div class="mb-5">
-              <label class="block font-bold mb-2">QR Code / ID Santri</label>
-              <div class="flex gap-2"><input type="text" id="j-id" class="flex-1 bg-gray-50 border-2 p-4 rounded-xl text-lg uppercase" autofocus><button type="button" onclick="cekSantriPedagang()" class="bg-gray-800 text-white px-5 rounded-xl font-bold">Cari</button></div>
-              <div id="j-info-box" class="mt-3 p-3 rounded-xl hidden"></div>
-            </div>
-            <div class="mb-8"><label class="block font-bold mb-2">Total Belanjaan (Rp)</label><input type="number" id="j-nom" class="w-full bg-gray-50 border-2 p-4 rounded-xl text-2xl font-bold" placeholder="0"></div>
-            <button onclick="submitJajan()" class="w-full bg-gray-900 text-white font-extrabold py-4 rounded-xl">POTONG SALDO</button>
+        <div class="max-w-md mx-auto mt-2">
+          <div class="text-center mb-5">
+            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-2">🛒</div>
+            <h2 class="text-2xl font-extrabold text-gray-800">Kasir Pintar</h2>
+            <p class="text-sm text-gray-500">Potong saldo santri</p>
           </div>
-          <button onclick="stopKamera(); renderDashboardPedagang()" class="w-full mt-4 text-center text-gray-500 font-medium">&larr; Kembali ke Home</button>
+          
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            
+            <!-- PILIHAN TAB: SCAN KAMERA HP vs INPUT MANUAL -->
+            <div class="bg-gray-100 p-1.5 rounded-xl flex items-center mb-5 border border-gray-200">
+              <button type="button" id="tab-mode-scan" onclick="switchModeKasir('scan')" class="flex-1 py-2.5 text-xs font-extrabold rounded-lg bg-white text-indigo-600 shadow-sm transition-all flex items-center justify-center gap-1.5">
+                <span>📷</span> <span>Scan Kamera HP</span>
+              </button>
+              <button type="button" id="tab-mode-manual" onclick="switchModeKasir('manual')" class="flex-1 py-2.5 text-xs font-bold rounded-lg text-gray-500 hover:text-gray-700 transition-all flex items-center justify-center gap-1.5">
+                <span>⌨️</span> <span>Input Manual</span>
+              </button>
+            </div>
+
+            <!-- MODE 1: SCAN KAMERA HP (Otomatis Terbuka) -->
+            <div id="area-mode-scan" class="mb-4">
+              <div id="reader-container" class="hidden mb-3 rounded-xl overflow-hidden border-2 border-indigo-500 relative bg-black min-h-[220px]">
+                <div id="reader" class="w-full bg-black"></div>
+              </div>
+              <button type="button" id="btn-kamera" onclick="toggleKamera()" class="w-full bg-indigo-50 text-indigo-700 font-bold py-2.5 rounded-xl border border-indigo-200 text-xs">📷 Buka Scanner QR</button>
+            </div>
+
+            <!-- MODE 2: INPUT MANUAL (Muncul Saat Tab Input Manual Diklik) -->
+            <div id="area-mode-manual" class="mb-4 hidden">
+              <label class="block font-bold mb-2 text-sm text-gray-700">QR Code / ID Santri</label>
+              <div class="flex gap-2">
+                <input type="text" id="j-id" placeholder="Ketik ID Santri..." class="flex-1 bg-gray-50 border-2 p-3.5 rounded-xl text-lg uppercase font-bold">
+                <button type="button" onclick="cekSantriPedagang()" class="bg-gray-800 text-white px-5 rounded-xl font-bold">Cari</button>
+              </div>
+            </div>
+
+            <!-- KOTAK INFO SANTRI (Muncul Otomatis Setelah Scan / Cari Manual) -->
+            <div id="j-info-box" class="mb-5 p-3 rounded-xl hidden"></div>
+
+            <!-- TOTAL BELANJAAN -->
+            <div class="mb-6">
+              <label class="block font-bold mb-2 text-sm text-gray-700">Total Belanjaan (Rp)</label>
+              <input type="number" id="j-nom" class="w-full bg-gray-50 border-2 p-4 rounded-xl text-2xl font-bold" placeholder="0">
+            </div>
+
+            <button onclick="submitJajan()" class="w-full bg-gray-900 hover:bg-gray-800 text-white font-extrabold py-4 rounded-xl shadow-lg transition-all">POTONG SALDO</button>
+          </div>
+          
+          <button onclick="stopKamera(); loadMenu(0, document.querySelector('.menu-btn'))" class="w-full mt-4 text-center text-gray-500 font-medium">&larr; Kembali ke Home</button>
         </div>
       `;
+
+      // Otomatis langsung menyalakan kamera saat menu Proses Jajan dibuka
+      setTimeout(() => {
+        switchModeKasir('scan');
+      }, 250);
+    }
+
+    function switchModeKasir(mode) {
+      const tabScan = document.getElementById('tab-mode-scan');
+      const tabManual = document.getElementById('tab-mode-manual');
+      const areaScan = document.getElementById('area-mode-scan');
+      const areaManual = document.getElementById('area-mode-manual');
+      const readerContainer = document.getElementById('reader-container');
+
+      if (mode === 'scan') {
+        tabScan.className = "flex-1 py-2.5 text-xs font-extrabold rounded-lg bg-white text-indigo-600 shadow-sm transition-all flex items-center justify-center gap-1.5";
+        tabManual.className = "flex-1 py-2.5 text-xs font-bold rounded-lg text-gray-500 hover:text-gray-700 transition-all flex items-center justify-center gap-1.5";
+        
+        areaScan.classList.remove('hidden');
+        areaManual.classList.add('hidden');
+
+        // Jika kamera belum menyala, langsung nyalakan otomatis
+        if (readerContainer && readerContainer.classList.contains('hidden')) {
+          toggleKamera();
+        }
+      } else {
+        tabManual.className = "flex-1 py-2.5 text-xs font-extrabold rounded-lg bg-white text-indigo-600 shadow-sm transition-all flex items-center justify-center gap-1.5";
+        tabScan.className = "flex-1 py-2.5 text-xs font-bold rounded-lg text-gray-500 hover:text-gray-700 transition-all flex items-center justify-center gap-1.5";
+        
+        areaManual.classList.remove('hidden');
+        areaScan.classList.add('hidden');
+
+        // Matikan kamera otomatis saat pedagang memilih mengetik manual
+        if (typeof stopKamera === 'function') stopKamera();
+        if (readerContainer) readerContainer.classList.add('hidden');
+
+        const inputId = document.getElementById('j-id');
+        if (inputId) inputId.focus();
+      }
     }
 
     async function cekSantriPedagang() {
